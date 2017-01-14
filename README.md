@@ -20,9 +20,17 @@ opam install verdi-runtime
 
 If you don't use OPAM, consult the [`opam`](opam) file for build instructions.
 
+## Files
+
+- `Shim.ml`: shim for extracted systems verified against a network semantics with _unordered_ message passing, implemented using UDP
+- `OrderedShim.ml`: shim for extracted systems verified against a network semantics with _ordered_ message passing, implemented using TCP
+- `Daemon.ml`: fair task-processing event loop based on the Unix `select` system call, used in `OrderedShim.ml`
+- `Opts.ml`: basic Verdi cluster command line argument processing based on OCaml's `Arg` module
+- `Util.ml`: miscellaneous functions, e.g., timestamps and conversion between `char list` and `string`
+
 ## Usage
 
 The best way to learn how to use Verdi Runtime is to examine its use in Verdi-based verification projects to link with OCaml code extracted by Coq:
 
-- [`verdi-raft`](https://github.com/uwplse/verdi-raft)
-- [`verdi-aggregation`](https://github.com/DistributedComponents/verdi-aggregation)
+- [Verdi Raft](https://github.com/uwplse/verdi-raft)
+- [Verdi Aggregation](https://github.com/DistributedComponents/verdi-aggregation)
