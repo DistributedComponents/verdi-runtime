@@ -1,17 +1,25 @@
 opam-version: "1.2"
-version: "1.0"
+name: "verdi-runtime"
+version: "dev"
 maintainer: "palmskog@gmail.com"
+
 homepage: "https://github.com/DistributedComponents/verdi-runtime"
 dev-repo: "https://github.com/DistributedComponents/verdi-runtime.git"
 bug-reports: "https://github.com/DistributedComponents/verdi-runtime/issues"
-authors: ["James Wilcox <>" "Doug Woos <>" "Steve Anton <>" "Karl Palmskog <>" "Ryan Doenges <>"]
-available: [ ocaml-version >= "4.02.3"]
 license: "BSD"
+
+available: [ ocaml-version >= "4.02.3" ]
+build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "topkg" {build} ]
-build: [
-  "ocaml" "pkg/pkg.ml" "build"
-          "--pinned" "%{pinned}%" 
+  "topkg" {build}
+]
+
+authors: [
+  "James Wilcox <>"
+  "Doug Woos <>"
+  "Steve Anton <>"
+  "Karl Palmskog <>"
+  "Ryan Doenges <>"
 ]
