@@ -5,7 +5,7 @@ open Str
 let cluster_default = []
 let me_default = -1
 let port_default = 8351
-let dbpath_default = "/var/lib/vard"
+let dbpath_default = "/tmp/verdi"
 let debug_default = false
 
 let cluster = ref cluster_default
@@ -21,7 +21,7 @@ let node_spec arg nodes_ref doc =
       (int_of_string (matched_group 1 opt),
        (matched_group 2 opt, int_of_string (matched_group 3 opt)))
     else
-      raise (Arg.Bad (sprintf "wrong argument: '%s'; option '%s' expects an address in the form 'name,host:port'" arg opt))
+      raise (Arg.Bad (sprintf "wrong argument: '%s'; option '%s' expects an entry in the form 'name,host:port'" arg opt))
   in (arg, Arg.String (fun opt -> nodes_ref := !nodes_ref @ [parse opt]), doc)
 
 let parse inp =
@@ -31,19 +31,22 @@ let parse inp =
     ; ("-port", Arg.Set_int port, "{port} port for client commands")
     ; ("-dbpath", Arg.Set_string dbpath, "{path} directory for storing database files")
     ; ("-debug", Arg.Set debug, "run in debug mode")
-    ] in  
+    ] in
    Arg.parse_argv ?current:(Some (ref 0)) inp
     opts
     (fun x -> raise (Arg.Bad (sprintf "%s does not take position arguments" inp.(0))))
     "Try -help for help or one of the following."
 
+let rec assoc_unique = function
+  | [] -> true
+  | (k, _) :: l -> if mem_assoc k l then false else assoc_unique l
+
 let validate () =
-  if length !cluster == 0 then begin
-    raise (Arg.Bad "Please specify at least one -node")
-  end;
-  if !me == me_default then begin
-    raise (Arg.Bad "Please specify the node name -me")
-  end;
-  if not (mem_assoc !me !cluster) then begin
-    raise (Arg.Bad (sprintf "%d is not a member of this cluster" !me))
-  end
+  if length !cluster == 0 then
+    raise (Arg.Bad "Please specify at least one -node");
+  if !me == me_default then
+    raise (Arg.Bad "Please specify the node name -me");
+  if not (mem_assoc !me !cluster) then
+    raise (Arg.Bad (sprintf "%d is not a member of this cluster" !me));
+  if not (assoc_unique !cluster) then
+    raise (Arg.Bad "Please remove duplicate -node name entries")
