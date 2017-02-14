@@ -1,12 +1,11 @@
 # Verdi Runtime
 
-Verdi Runtime is an OCaml library providing the functionality necessary to run distributed systems developed in the [Coq](https://coq.inria.fr)-based [Verdi framework](https://github.com/uwplse/verdi) on real hardware. In particular, it provides several shims that handle the lower-level details of network communication.
+Verdi Runtime is an OCaml library providing the functionality necessary to run distributed systems developed in the [Coq](https://coq.inria.fr) based [Verdi framework](https://github.com/uwplse/verdi) on real hardware. In particular, it provides several shims that handle the lower-level details of network communication.
 
 ## Requirements
 
 - [`OCaml 4.02.3`](https://ocaml.org)
 - [`ocamlfind`](http://projects.camlcity.org/projects/findlib.html)
-- [`ocamlbuild`](https://github.com/ocaml/ocamlbuild)
 - [`topkg`](http://erratique.ch/software/topkg)
 
 ## Installation
@@ -14,7 +13,7 @@ Verdi Runtime is an OCaml library providing the functionality necessary to run d
 The easiest way to install the library (and its dependencies) is via [OPAM](https://opam.ocaml.org).
 
 ```
-opam repo add distributedcomponents http://opam.distributedcomponents.net
+opam repo add distributedcomponents-dev http://opam-dev.distributedcomponents.net
 opam install verdi-runtime
 ```
 
@@ -30,7 +29,6 @@ If you don't use OPAM, consult the [`opam`](opam) file for build instructions.
 
 ## Usage
 
-In order to run Verdi systems, the proper shim from Verdi Runtime must be linked to event handler code extracted by Coq. Examples of this use can be found in Verdi-based verification projects.
+In order to run Verdi systems, the proper shim from Verdi Runtime must be linked to event handler code extracted by Coq. Examples of this use can be found in Verdi-based verification projects:
 
 - [Verdi Raft](https://github.com/uwplse/verdi-raft)
-- [Verdi Aggregation](https://github.com/DistributedComponents/verdi-aggregation)
