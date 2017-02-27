@@ -49,4 +49,6 @@ let validate () =
   if not (mem_assoc !me !cluster) then
     raise (Arg.Bad (sprintf "%d is not a member of this cluster" !me));
   if not (assoc_unique !cluster) then
-    raise (Arg.Bad "Please remove duplicate -node name entries")
+    raise (Arg.Bad "Please remove duplicate -node name entries");
+  if !port = snd (List.assoc !me !cluster) then
+    raise (Arg.Bad "Can't use same port for client commands and messages")
