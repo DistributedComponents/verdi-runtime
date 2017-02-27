@@ -10,6 +10,7 @@ let () =
 	 Pkg.lib "src/Daemon.cmi";
 	 Pkg.lib "src/Shim.cmi";
 	 Pkg.lib "src/OrderedShim.cmi";
+	 Pkg.lib "src/UnorderedShim.cmi";
 	 Pkg.lib "src/verdi_runtime.a";
 	 Pkg.lib "src/verdi_runtime.cma";
 	 Pkg.lib "src/verdi_runtime.cmxa";
