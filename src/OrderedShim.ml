@@ -55,6 +55,8 @@ module Shim (A: ARRANGEMENT) = struct
       ; tasks : (file_descr, (env, A.state) task) Hashtbl.t
       }
 
+  exception Disconnect of string
+
   let sock_of_name (env : env) (node_name : A.name) : string * int =
     Hashtbl.find env.cluster node_name
 
@@ -107,11 +109,9 @@ module Shim (A: ARRANGEMENT) = struct
     listen env.clients_fd 8;
     (env, initial_state)
 
-  exception Disconnect of string
-
   (* throws Unix_error, Disconnect *)
-  let send_chunk (fd : file_descr) (buf : string) : unit =
-    let len = String.length buf in
+  let send_chunk (fd : file_descr) (buf : bytes) : unit =
+    let len = Bytes.length buf in
     let n = Unix.send fd (raw_bytes_of_int len) 0 4 [] in
     if n < 4 then raise (Disconnect "send_chunk: message header failed to send all at once");
     let n = Unix.send fd buf 0 len [] in
@@ -299,7 +299,7 @@ module Shim (A: ARRANGEMENT) = struct
     deliver_msg env state src msg
 
   (* throws Disconnect, Unix_error *)
-  let input_step (fd : file_descr) (env : env) (state : A.state) =
+  let input_step (env : env) (fd : file_descr) (state : A.state) =
     let buf = receive_chunk env fd in
     let c = undenote_client env fd in
     match A.deserializeInput buf c with
@@ -356,7 +356,7 @@ module Shim (A: ARRANGEMENT) = struct
     ; process_read =
 	(fun t env state ->
 	  try
-	    let state' = input_step t.fd env state in
+	    let state' = input_step env t.fd state in
 	    (false, [], state')
 	  with 
 	  | Disconnect s ->
