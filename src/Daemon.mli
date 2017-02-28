@@ -7,4 +7,4 @@ type ('env, 'state) task  =
   ; finalize : ('env, 'state) task -> 'env -> 'state -> 'state
   }
 
-val eloop : float -> float -> (Unix.file_descr, ('a, 'b) task) Hashtbl.t -> 'a -> 'b -> 'c
+val eloop : float -> float -> (Unix.file_descr, ('env, 'state) task) Hashtbl.t -> 'env -> 'state -> unit
