@@ -42,13 +42,13 @@ let rec assoc_unique = function
   | (k, _) :: l -> if mem_assoc k l then false else assoc_unique l
 
 let validate () =
-  if length !cluster == 0 then
+  if length !cluster = 0 then
     raise (Arg.Bad "Please specify at least one -node");
-  if !me == me_default then
+  if !me = me_default then
     raise (Arg.Bad "Please specify the node name -me");
   if not (mem_assoc !me !cluster) then
     raise (Arg.Bad (sprintf "%d is not a member of this cluster" !me));
   if not (assoc_unique !cluster) then
     raise (Arg.Bad "Please remove duplicate -node name entries");
-  if !port = snd (List.assoc !me !cluster) then
+  if !port = snd (assoc !me !cluster) then
     raise (Arg.Bad "Can't use same port for client commands and messages")
