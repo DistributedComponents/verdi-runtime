@@ -7,7 +7,7 @@ module type ARRANGEMENT = sig
   type client_id
   type res = (output list * state) * ((name * msg) list)
   type task_handler = name -> state -> res
-  type timeout_setter = name -> state -> float
+  type timeout_setter = name -> state -> float option
   val systemName : string
   val serializeName : name -> string
   val deserializeName : string -> name option

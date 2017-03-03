@@ -96,14 +96,38 @@ let timestamp () =
     Unix.(tm.tm_year+1900) Unix.(tm.tm_mon+1) Unix.(tm.tm_mday)
     Unix.(tm.tm_hour) Unix.(tm.tm_min) Unix.(tm.tm_sec) frs
 
-let log level s =
-  let now = Unix.gettimeofday () in
-  Printf.printf "%f - %s: %s\n" now level s
+let log level s = Printf.printf "[%s] %s: %s\n" (timestamp ()) level s
 
-let dbg = log "DEBUG"
+let debug = log "DEBUG"
 
 let info = log "INFO"
 
 let keys_of_hashtbl h =
   let cons k _ l = k :: l in
   Hashtbl.fold cons h []
+
+exception Disconnect of string
+
+(* throws Unix_error, Disconnect *)
+let send_chunk (fd : Unix.file_descr) (buf : bytes) : unit =
+  let len = Bytes.length buf in
+  let n = Unix.send fd (raw_bytes_of_int len) 0 4 [] in
+  if n < 4 then raise (Disconnect "send_chunk: message header failed to send all at once");
+  let n = Unix.send fd buf 0 len [] in
+  if n < len then raise (Disconnect (Printf.sprintf "send_chunk: message of length %d failed to send all at once" len))
+
+(* throws Unix_error, Disconnect *)
+let receive_chunk (fd : Unix.file_descr) : bytes =
+  let receive_check fd buf offs len flags =
+    let n = Unix.recv fd buf offs len flags in
+    if n = 0 then raise (Disconnect "receive_chunk: other side closed connection");
+    n
+  in
+  let buf4 = Bytes.make 4 '\x00' in
+  let n = receive_check fd buf4 0 4 [] in
+  if n < 4 then raise (Disconnect "receive_chunk: message header did not arrive all at once");
+  let len = int_of_raw_bytes buf4 in
+  let buf = Bytes.make len '\x00' in
+  let n = receive_check fd buf 0 len [] in
+  if n < len then raise (Disconnect (Printf.sprintf "receive_chunk: message of length %d did not arrive all at once" len));
+  buf

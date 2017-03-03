@@ -7,6 +7,12 @@ type ('env, 'state) task  =
   ; finalize : ('env, 'state) task -> 'env -> 'state -> 'state
   }
 
+let schedule_finalize_task t tm =
+  t.select_on <- false;
+  t.wake_time <- Some tm;
+  t.process_read <- (fun t env state -> (true, [], state));
+  t.process_wake <- (fun t env state -> (true, [], state))
+
 let process process_f t hts env state =
   let state = ref state in
   let (finished, ts, state') = process_f t env !state in

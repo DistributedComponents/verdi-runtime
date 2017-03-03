@@ -35,6 +35,7 @@ Files
 Usage
 -----
 
-In order to run Verdi systems, the proper shim from Verdi Runtime must be linked to the OCaml event handler code extracted by Coq. Examples of this use can be found in Verdi-based verification projects:
+In order to run Verdi systems, the proper shim from Verdi Runtime must be linked to the OCaml event handler code extracted by Coq. Examples of this use can be found in Verdi-based verification projects.
 
+- [Verdi LockServ](https://github.com/DistributedComponents/verdi-lockserv)
 - [Verdi Raft](https://github.com/uwplse/verdi-raft)

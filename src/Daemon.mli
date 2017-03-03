@@ -7,4 +7,6 @@ type ('env, 'state) task  =
   ; finalize : ('env, 'state) task -> 'env -> 'state -> 'state
   }
 
+val schedule_finalize_task : ('env, 'state) task -> float -> unit
+
 val eloop : float -> float -> (Unix.file_descr, ('env, 'state) task) Hashtbl.t -> 'env -> 'state -> unit

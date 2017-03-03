@@ -12,7 +12,7 @@ module type ARRANGEMENT = sig
   type client_id
   type res = (output list * state) * ((name * msg) list)
   type task_handler = name -> state -> res
-  type timeout_setter = name -> state -> float
+  type timeout_setter = name -> state -> float option
   val systemName : string
   val serializeName : name -> string
   val deserializeName : string -> name option
@@ -48,8 +48,6 @@ module Shim (A: ARRANGEMENT) = struct
       ; client_write_fds : (A.client_id, file_descr) Hashtbl.t
       ; tasks : (file_descr, (env, A.state) task) Hashtbl.t
       }
-
-  exception Disconnect of string
 
   (* Translate node name to UDP socket address. *)
   let denote_node (env : env) (name : A.name) : sockaddr =
@@ -100,36 +98,6 @@ module Shim (A: ARRANGEMENT) = struct
     listen env.clients_fd 8;
     (env, initial_state)
 
-  (* throws Unix_error, Disconnect *)
-  let send_chunk (fd : file_descr) (buf : bytes) : unit =
-    let len = Bytes.length buf in
-    let n = Unix.send fd (raw_bytes_of_int len) 0 4 [] in
-    if n < 4 then raise (Disconnect "send_chunk: message header failed to send all at once");
-    let n = Unix.send fd buf 0 len [] in
-    if n < len then raise (Disconnect (sprintf "send_chunk: message of length %d failed to send all at once" len))
-  
-  (* throws Unix_error, Disconnect *)
-  let receive_chunk env (fd : file_descr) : bytes =
-    let receive_check fd buf offs len flags =
-      let n = Unix.recv fd buf offs len flags in
-      if n = 0 then raise (Disconnect "receive_chunk: other side closed connection");
-      n
-    in
-    let buf4 = Bytes.make 4 '\x00' in
-    let n = receive_check fd buf4 0 4 [] in
-    if n < 4 then raise (Disconnect "receive_chunk: message header did not arrive all at once");
-    let len = int_of_raw_bytes buf4 in
-    let buf = Bytes.make len '\x00' in
-    let n = receive_check fd buf 0 len [] in
-    if n < len then raise (Disconnect (sprintf "receive_chunk: message of length %d did not arrive all at once" len));
-    buf
-
-  let schedule_finalize_task t =
-    t.select_on <- false;
-    t.wake_time <- Some 0.5;
-    t.process_read <- (fun t env state -> (true, [], state));
-    t.process_wake <- (fun t env state -> (true, [], state))
-
   (* throws nothing *)
   let output env o =
     let (c, out) = A.serializeOutput o in
@@ -141,11 +109,11 @@ module Shim (A: ARRANGEMENT) = struct
     | Disconnect s ->
       eprintf "output: failed send to client %s: %s" (A.serializeClientId c) s;
       prerr_newline ();
-      schedule_finalize_task (Hashtbl.find env.tasks (denote_client env c))
+      schedule_finalize_task (Hashtbl.find env.tasks (denote_client env c)) 0.5
     | Unix_error (err, fn, _) ->
       eprintf "output: error %s" (error_message err);
       prerr_newline ();
-      schedule_finalize_task (Hashtbl.find env.tasks (denote_client env c))
+      schedule_finalize_task (Hashtbl.find env.tasks (denote_client env c)) 0.5
 
   (* throws Unix_error *)
   let new_client_conn env =
@@ -176,7 +144,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   (* throws Disconnect, Unix_error *)
   let input_step (env : env) (fd : file_descr) (state : A.state) =
-    let buf = receive_chunk env fd in
+    let buf = receive_chunk fd in
     let c = undenote_client env fd in
     match A.deserializeInput buf c with
     | Some inp ->
@@ -266,12 +234,12 @@ module Shim (A: ARRANGEMENT) = struct
   let timeout_task env curr_state handler setter =
     { fd = Unix.dup env.clients_fd
     ; select_on = false
-    ; wake_time = Some (setter env.cfg.me curr_state)
+    ; wake_time = setter env.cfg.me curr_state
     ; process_read = (fun t env state -> (false, [], state))
     ; process_wake =
 	(fun t env state ->
 	  let state' = respond env (handler env.cfg.me state) in
-	  t.wake_time <- Some (setter env.cfg.me state');
+	  t.wake_time <- setter env.cfg.me state';
 	  (false, [], state'))
     ; finalize = (fun t env state -> Unix.close t.fd; state)
     }

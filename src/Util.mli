@@ -34,8 +34,14 @@ val timestamp : unit -> string
 
 val log : string -> string -> unit
 
-val dbg : string -> unit
+val debug : string -> unit
 
 val info : string -> unit
 
 val keys_of_hashtbl : ('a, 'b) Hashtbl.t -> 'a list
+
+exception Disconnect of string
+
+val send_chunk : Unix.file_descr -> bytes -> unit
+
+val receive_chunk : Unix.file_descr -> bytes
