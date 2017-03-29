@@ -402,16 +402,20 @@ module Shim (A: ARRANGEMENT) = struct
     ; finalize = (fun t env state -> Unix.close t.fd; state)
     }
 
-  let timeout_task env curr_state handler setter =
+  let timeout_task env handler setter time =
     { fd = Unix.dup env.clients_fd
     ; select_on = false
-    ; wake_time = setter env.me curr_state
+    ; wake_time = Some time
     ; process_read = (fun t env state -> (false, [], state))
     ; process_wake =
 	(fun t env state ->
 	  let state' = respond env (handler env.me state) in
-	  t.wake_time <- setter env.me state';
-	  (false, [], state'))
+	  match setter env.me state' with
+	  | None -> (true, [], state')
+	  | Some time' -> begin
+	    t.wake_time <- Some time';
+	    (false, [], state')
+	  end)
     ; finalize = (fun t env state -> Unix.close t.fd; state)
     }
  
@@ -425,9 +429,13 @@ module Shim (A: ARRANGEMENT) = struct
     Hashtbl.add env.tasks t_conn_nd.fd t_conn_nd;
     Hashtbl.add env.tasks t_nd_conn.fd t_nd_conn;
     Hashtbl.add env.tasks t_cl_conn.fd t_cl_conn;
-    List.iter (fun (h, s) ->
-      let t = timeout_task env initial_state h s in
-      Hashtbl.add env.tasks t.fd t) A.timeoutTasks;
+    List.iter (fun (handler, setter) ->
+      match setter env.me initial_state with
+      | None -> ()
+      | Some time ->
+	let t = timeout_task env handler setter time in
+	Hashtbl.add env.tasks t.fd t)
+      A.timeoutTasks;
     printf "ordered shim ready for %s" A.systemName;
     print_newline ();
     eloop 2.0 (Unix.gettimeofday ()) env.tasks env initial_state
