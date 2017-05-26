@@ -131,3 +131,7 @@ let receive_chunk (fd : Unix.file_descr) : bytes =
   let n = receive_check fd buf 0 len [] in
   if n < len then raise (Disconnect (Printf.sprintf "receive_chunk: message of length %d did not arrive all at once" len));
   buf
+
+let arr_of_string s =
+  let listl = (Str.split (Str.regexp " ") s) in
+  (Array.of_list listl)

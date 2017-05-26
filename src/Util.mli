@@ -45,3 +45,5 @@ exception Disconnect of string
 val send_chunk : Unix.file_descr -> bytes -> unit
 
 val receive_chunk : Unix.file_descr -> bytes
+
+val arr_of_string : string -> string array
