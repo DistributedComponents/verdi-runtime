@@ -156,22 +156,24 @@ module Shim (A: ARRANGEMENT) = struct
 
   let sendto sock buf addr =
     try
-      ignore (Unix.sendto sock buf 0 (String.length buf) [] addr)
+      ignore (Unix.sendto sock buf 0 (Bytes.length buf) [] addr)
     with Unix_error (err, fn, arg) ->
       printf "error in sendto: %s, dropping message" (error_message err);
       print_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
-    sendto env.nodes_fd (A.serializeMsg msg) (denote_node env nm)
+    let buf = Bytes.of_string (A.serializeMsg msg) in
+    sendto env.nodes_fd buf (denote_node env nm)
 
-  let send_to_client env fd out =
-    try ignore (Unix.send fd (out ^ "\n") 0 (String.length out) [])
+  let send_to_client env fd buf =
+    try ignore (Unix.send fd buf 0 (Bytes.length buf) [])
     with Unix_error (err, fn, arg) ->
       disconnect_client env fd (sprintf "error in send_to_client: %s" (error_message err))
 
   let output env o =
     let (c, out) = A.serializeOutput o in
-    try send_to_client env (denote_client env c) out
+    let buf = Bytes.of_string (out ^ "\n") in
+    try send_to_client env (denote_client env c) buf
     with Not_found ->
       printf "output: failed to find socket for client %s" (A.serializeClientId c);
       print_newline ()
@@ -203,21 +205,22 @@ module Shim (A: ARRANGEMENT) = struct
   exception Disconnect_client of string
 
   let read_from_client fd len =
-    let buf = String.make len '\x00' in
-    let bytes_read = recv fd buf 0 len [MSG_PEEK] in
+    let buf1 = Bytes.make len '\x00' in
+    let bytes_read = recv fd buf1 0 len [MSG_PEEK] in
     if bytes_read = 0 then raise (Disconnect_client "client closed socket");
     let msg_len =
-      try (String.index buf '\n') + 1
+      try (Bytes.index buf1 '\n') + 1
       with Not_found -> raise (Disconnect_client "invalid data from client") in
-    let buf2 = String.make msg_len '\x00' in
+    let buf2 = Bytes.make msg_len '\x00' in
     ignore (recv fd buf2 0 msg_len []);
-    buf
+    buf1
 
   let input_step (fd : file_descr) (env : env) (state : A.state) =
     try
       let buf = read_from_client fd 1024 in
+      let str = Bytes.to_string buf in
       let c = undenote_client env fd in
-      match A.deserializeInput buf c with
+      match A.deserializeInput str c with
       | Some inp ->
         save env (LogInput inp) state;
         let state' = respond env (A.handleIO env.cfg.me inp state) in
@@ -236,9 +239,10 @@ module Shim (A: ARRANGEMENT) = struct
 
   let recv_step (env : env) (state : A.state) : A.state =
     let len = 65536 in
-    let buf = String.make len '\x00' in
+    let buf = Bytes.make len '\x00' in
     let (_, from) = recvfrom env.nodes_fd buf 0 len [] in
-    let (src, msg) = (undenote_node env from, A.deserializeMsg buf) in
+    let str = Bytes.to_string buf in
+    let (src, msg) = (undenote_node env from, A.deserializeMsg str) in
     save env (LogNet (src, msg)) state;
     let state' = respond env (A.handleNet env.cfg.me src msg state) in
     if A.debug then A.debugRecv state' (src, msg);

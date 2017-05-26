@@ -101,7 +101,8 @@ module Shim (A: ARRANGEMENT) = struct
   (* throws nothing *)
   let output env o =
     let (c, out) = A.serializeOutput o in
-    try send_chunk (denote_client env c) out
+    let buf = Bytes.of_string out in
+    try send_chunk (denote_client env c) buf
     with
     | Not_found ->
       eprintf "output: failed to find socket for client %s" (A.serializeClientId c);
@@ -129,13 +130,14 @@ module Shim (A: ARRANGEMENT) = struct
 
   let sendto sock buf addr =
     try
-      ignore (Unix.sendto sock buf 0 (String.length buf) [] addr)
+      ignore (Unix.sendto sock buf 0 (Bytes.length buf) [] addr)
     with Unix_error (err, fn, arg) ->
       printf "error in sendto: %s, dropping message" (error_message err);
       print_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
-    sendto env.nodes_fd (A.serializeMsg msg) (denote_node env nm)
+    let buf = Bytes.of_string (A.serializeMsg msg) in
+    sendto env.nodes_fd buf (denote_node env nm)
 
   let respond env ((os, s), ps) =
     List.iter (output env) os;
@@ -145,24 +147,26 @@ module Shim (A: ARRANGEMENT) = struct
   (* throws Disconnect, Unix_error *)
   let input_step (env : env) (fd : file_descr) (state : A.state) =
     let buf = receive_chunk fd in
+    let str = Bytes.to_string buf in
     let c = undenote_client env fd in
-    match A.deserializeInput buf c with
+    match A.deserializeInput str c with
     | Some inp ->
       let state' = respond env (A.handleIO env.cfg.me inp state) in
       if A.debug then A.debugInput state' inp;
       state'
     | None ->
-      raise (Disconnect (sprintf "input_step: could not deserialize %s" buf))
+      raise (Disconnect (sprintf "input_step: could not deserialize %s" str))
 
   (* throws Unix_error *)
   let recv_step (env : env) (fd : file_descr) (state : A.state) : A.state =
     let len = 65536 in
     let buf = Bytes.make len '\x00' in
     let (_, from) = recvfrom fd buf 0 len [] in
-    let (src, msg) = (undenote_node env from, A.deserializeMsg buf) in
+    let str = Bytes.to_string buf in
+    let (src, msg) = (undenote_node env from, A.deserializeMsg str) in
     let state' = respond env (A.handleNet env.cfg.me src msg state) in
     if A.debug then A.debugRecv state' (src, msg);
-    state'  
+    state'
 
   let node_read_task env =
     { fd = env.nodes_fd

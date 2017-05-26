@@ -110,7 +110,8 @@ module Shim (A: ARRANGEMENT) = struct
   (* throws nothing *)
   let output env o =
     let (c, out) = A.serializeOutput o in
-    try send_chunk (denote_client env c) out
+    let buf = Bytes.of_string out in
+    try send_chunk (denote_client env c) buf
     with
     | Not_found ->
       eprintf "output: failed to find socket for client %s" (A.serializeClientId c);
@@ -145,9 +146,11 @@ module Shim (A: ARRANGEMENT) = struct
     let write_fd = Unix.socket PF_INET SOCK_STREAM 0 in
     try
       Unix.connect write_fd node_addr;
-      send_chunk write_fd (A.serializeName env.me);
+      let nbuf = Bytes.of_string (A.serializeName env.me) in
+      send_chunk write_fd nbuf;
       let (ip, port) = sock_of_name env env.me in
-      send_chunk write_fd (sprintf "%s:%d" ip port);
+      let abuf = Bytes.of_string (sprintf "%s:%d" ip port) in
+      send_chunk write_fd abuf;
       if A.debug then begin
 	printf "[%s] ...connected!" (timestamp ());
 	print_newline ()
@@ -183,9 +186,10 @@ module Shim (A: ARRANGEMENT) = struct
       | Disconnect s -> Unix.close node_read_fd; raise (Disconnect s)
       | Unix_error (err, fn, _) ->
 	Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: error in %s: %s" fn (error_message err)))
-    in 
-    match A.deserializeName name_buf with
-    | None -> Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: failed to deserialize name %s" name_buf))
+    in
+    let name_str = Bytes.to_string name_buf in
+    match A.deserializeName name_str with
+    | None -> Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: failed to deserialize name %s" name_str))
     | Some node_name ->
       let sock_buf = 
 	try receive_chunk node_read_fd
@@ -194,9 +198,10 @@ module Shim (A: ARRANGEMENT) = struct
 	| Unix_error (err, fn, _) -> 
 	  Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: error in %s: %s" fn (error_message err)))
       in
+      let sock_str = Bytes.to_string sock_buf in
       let sock =
-	try Scanf.sscanf sock_buf "%[^:]:%d" (fun i p -> (i, p))
-	with _ -> Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: sscanf error %s" sock_buf))
+	try Scanf.sscanf sock_str "%[^:]:%d" (fun i p -> (i, p))
+	with _ -> Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: sscanf error %s" sock_str))
       in
       Hashtbl.replace env.cluster node_name sock;
       begin
@@ -228,7 +233,8 @@ module Shim (A: ARRANGEMENT) = struct
       try denote_node env node_name
       with Not_found -> raise (Disconnect "send_msg: message destination not found")
     in
-    send_chunk node_fd (A.serializeMsg msg)
+    let buf = Bytes.of_string (A.serializeMsg msg) in
+    send_chunk node_fd buf
 
   (* throws nothing *)
   let respond env ((os, s), ps) = (* assume outgoing message destinations have tasks *)
@@ -263,20 +269,22 @@ module Shim (A: ARRANGEMENT) = struct
       try undenote_node env fd
       with Not_found -> failwith "recv_step: failed to find source for message"
     in
-    let msg = A.deserializeMsg buf in
+    let str = Bytes.to_string buf in
+    let msg = A.deserializeMsg str in
     deliver_msg env state src msg
 
   (* throws Disconnect, Unix_error *)
   let input_step (env : env) (fd : file_descr) (state : A.state) =
     let buf = receive_chunk fd in
+    let str = Bytes.to_string buf in
     let c = undenote_client env fd in
-    match A.deserializeInput buf c with
+    match A.deserializeInput str c with
     | Some inp ->
       let state' = respond env (A.handleIO env.me inp state) in
       if A.debug then A.debugInput state' inp;
       state'
     | None ->
-      raise (Disconnect (sprintf "input_step: could not deserialize %s" buf))
+      raise (Disconnect (sprintf "input_step: could not deserialize %s" str))
 
   let node_read_task fd =
     { fd = fd
