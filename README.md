@@ -6,7 +6,7 @@ Verdi Runtime is an OCaml library providing the functionality necessary to run v
 Requirements
 ------------
 
-- [`OCaml 4.02.3`](https://ocaml.org)
+- [`OCaml 4.02.3`](https://ocaml.org) (or later)
 - [`ocamlfind`](http://projects.camlcity.org/projects/findlib.html)
 - [`topkg`](http://erratique.ch/software/topkg)
 
