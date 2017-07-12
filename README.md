@@ -7,6 +7,7 @@ Requirements
 ------------
 
 - [`OCaml 4.02.3`](https://ocaml.org) (or later)
+- [`OCamlbuild`](https://github.com/ocaml/ocamlbuild)
 - [`ocamlfind`](http://projects.camlcity.org/projects/findlib.html)
 - [`topkg`](http://erratique.ch/software/topkg)
 

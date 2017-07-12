@@ -13,23 +13,21 @@ module type ARRANGEMENT = sig
   type res = (output list * state) * ((name * msg) list)
   type task_handler = name -> state -> res
   type timeout_setter = name -> state -> float option
-  val systemName : string
-  val serializeName : name -> string
-  val deserializeName : string -> name option
+  val system_name : string
   val init : name -> state
-  val handleIO : name -> input -> state -> res
-  val handleNet : name -> name -> msg -> state -> res
-  val deserializeMsg : string -> msg
-  val serializeMsg : msg -> string
-  val deserializeInput : string -> client_id -> input option
-  val serializeOutput : output -> client_id * string
+  val handle_input : name -> input -> state -> res
+  val handle_msg : name -> name -> msg -> state -> res
+  val deserialize_msg : bytes -> msg
+  val serialize_msg : msg -> bytes
+  val deserialize_input : bytes -> client_id -> input option
+  val serialize_output : output -> client_id * bytes
   val debug : bool
-  val debugInput : state -> input -> unit
-  val debugRecv : state -> (name * msg) -> unit
-  val debugSend : state -> (name * msg) -> unit
-  val createClientId : unit -> client_id
-  val serializeClientId : client_id -> string
-  val timeoutTasks : (task_handler * timeout_setter) list
+  val debug_input : state -> input -> unit
+  val debug_recv_msg : state -> (name * msg) -> unit
+  val debug_send_msg : state -> (name * msg) -> unit
+  val create_client_id : unit -> client_id
+  val string_of_client_id : client_id -> string
+  val timeout_tasks : (task_handler * timeout_setter) list
 end
 
 module Shim (A: ARRANGEMENT) = struct
@@ -100,15 +98,14 @@ module Shim (A: ARRANGEMENT) = struct
 
   (* throws nothing *)
   let output env o =
-    let (c, out) = A.serializeOutput o in
-    let buf = Bytes.of_string out in
-    try send_chunk (denote_client env c) buf
+    let (c, out) = A.serialize_output o in
+    try send_chunk (denote_client env c) out
     with
     | Not_found ->
-      eprintf "output: failed to find socket for client %s" (A.serializeClientId c);
+      eprintf "output: failed to find socket for client %s" (A.string_of_client_id c);
       prerr_newline ()
     | Disconnect s ->
-      eprintf "output: failed send to client %s: %s" (A.serializeClientId c) s;
+      eprintf "output: failed send to client %s: %s" (A.string_of_client_id c) s;
       prerr_newline ();
       schedule_finalize_task (Hashtbl.find env.tasks (denote_client env c)) 0.5
     | Unix_error (err, fn, _) ->
@@ -119,11 +116,11 @@ module Shim (A: ARRANGEMENT) = struct
   (* throws Unix_error *)
   let new_client_conn env =
     let (client_fd, client_addr) = accept env.clients_fd in
-    let c = A.createClientId () in
+    let c = A.create_client_id () in
     Hashtbl.replace env.client_read_fds client_fd c;
     Hashtbl.replace env.client_write_fds c client_fd;
     if A.debug then begin
-      printf "[%s] client %s connected on %s" (timestamp ()) (A.serializeClientId c) (string_of_sockaddr client_addr);
+      printf "[%s] client %s connected on %s" (timestamp ()) (A.string_of_client_id c) (string_of_sockaddr client_addr);
       print_newline ()
     end;
     client_fd
@@ -136,36 +133,33 @@ module Shim (A: ARRANGEMENT) = struct
       print_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
-    let buf = Bytes.of_string (A.serializeMsg msg) in
-    sendto env.nodes_fd buf (denote_node env nm)
+    sendto env.nodes_fd (A.serialize_msg msg) (denote_node env nm)
 
   let respond env ((os, s), ps) =
     List.iter (output env) os;
-    List.iter (fun p -> if A.debug then A.debugSend s p; send env p) ps;
+    List.iter (fun p -> if A.debug then A.debug_send_msg s p; send env p) ps;
     s
 
   (* throws Disconnect, Unix_error *)
   let input_step (env : env) (fd : file_descr) (state : A.state) =
     let buf = receive_chunk fd in
-    let str = Bytes.to_string buf in
     let c = undenote_client env fd in
-    match A.deserializeInput str c with
+    match A.deserialize_input buf c with
     | Some inp ->
-      let state' = respond env (A.handleIO env.cfg.me inp state) in
-      if A.debug then A.debugInput state' inp;
+      let state' = respond env (A.handle_input env.cfg.me inp state) in
+      if A.debug then A.debug_input state' inp;
       state'
     | None ->
-      raise (Disconnect (sprintf "input_step: could not deserialize %s" str))
+      raise (Disconnect (sprintf "input_step: could not deserialize %s" (Bytes.to_string buf)))
 
   (* throws Unix_error *)
   let recv_step (env : env) (fd : file_descr) (state : A.state) : A.state =
     let len = 65536 in
     let buf = Bytes.make len '\x00' in
     let (_, from) = recvfrom fd buf 0 len [] in
-    let str = Bytes.to_string buf in
-    let (src, msg) = (undenote_node env from, A.deserializeMsg str) in
-    let state' = respond env (A.handleNet env.cfg.me src msg state) in
-    if A.debug then A.debugRecv state' (src, msg);
+    let (src, msg) = (undenote_node env from, A.deserialize_msg buf) in
+    let state' = respond env (A.handle_msg env.cfg.me src msg state) in
+    if A.debug then A.debug_recv_msg state' (src, msg);
     state'
 
   let node_read_task env =
@@ -196,11 +190,11 @@ module Shim (A: ARRANGEMENT) = struct
 	    (false, [], state')
 	  with 
 	  | Disconnect s ->
-	    eprintf "connection error for client %s: %s" (A.serializeClientId (undenote_client env t.fd)) s;
+	    eprintf "connection error for client %s: %s" (A.string_of_client_id (undenote_client env t.fd)) s;
 	    prerr_newline ();
 	    (true, [], state)
 	  | Unix_error (err, fn, _) ->
-	    eprintf "error for client %s: %s" (A.serializeClientId (undenote_client env t.fd)) (error_message err);
+	    eprintf "error for client %s: %s" (A.string_of_client_id (undenote_client env t.fd)) (error_message err);
 	    prerr_newline ();
 	    (true, [], state))
     ; process_wake = (fun t env state -> (false, [], state))
@@ -209,7 +203,7 @@ module Shim (A: ARRANGEMENT) = struct
 	  let client_fd = t.fd in
 	  let c = undenote_client env client_fd in
 	  if A.debug then begin
-	    printf "[%s] closing connection to client %s" (timestamp ()) (A.serializeClientId c);
+	    printf "[%s] closing connection to client %s" (timestamp ()) (A.string_of_client_id c);
 	    print_newline ();
 	  end;
 	  Hashtbl.remove env.client_read_fds client_fd;
@@ -253,7 +247,7 @@ module Shim (A: ARRANGEMENT) = struct
     }
 
   let main (cfg : cfg) : unit =
-    printf "daemonized unordered shim running setup for %s" A.systemName;
+    printf "daemonized unordered shim running setup for %s" A.system_name;
     print_newline ();
     let (env, initial_state) = setup cfg in
     let t_nd_conn = node_read_task env in
@@ -266,8 +260,8 @@ module Shim (A: ARRANGEMENT) = struct
       | Some time ->
 	let t = timeout_task env handler setter time in
 	Hashtbl.add env.tasks t.fd t)
-      A.timeoutTasks;
-    printf "daemonized unordered shim ready for %s" A.systemName;
+      A.timeout_tasks;
+    printf "daemonized unordered shim ready for %s" A.system_name;
     print_newline ();
     eloop 2.0 (Unix.gettimeofday ()) env.tasks env initial_state
 end
