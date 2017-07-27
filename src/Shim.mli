@@ -13,10 +13,10 @@ module type ARRANGEMENT = sig
   val handleNet : name -> name -> msg -> state -> res
   val handleTimeout : name -> state -> res
   val setTimeout : name -> state -> float
-  val deserializeMsg : string -> msg
-  val serializeMsg : msg -> string
-  val deserializeInput : string -> client_id -> input option
-  val serializeOutput : output -> client_id * string
+  val deserializeMsg : bytes -> msg
+  val serializeMsg : msg -> bytes
+  val deserializeInput : bytes -> client_id -> input option
+  val serializeOutput : output -> client_id * bytes
   val debug : bool
   val debugInput : state -> input -> unit
   val debugRecv : state -> (name * msg) -> unit
