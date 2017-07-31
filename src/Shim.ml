@@ -20,10 +20,10 @@ module type ARRANGEMENT = sig
   val handleNet : name -> name -> msg -> state -> res
   val handleTimeout : name -> state -> res
   val setTimeout : name -> state -> float
-  val deserializeMsg : string -> msg
-  val serializeMsg : msg -> string
-  val deserializeInput : string -> client_id -> input option
-  val serializeOutput : output -> client_id * string
+  val deserializeMsg : bytes -> msg
+  val serializeMsg : msg -> bytes
+  val deserializeInput : bytes -> client_id -> input option
+  val serializeOutput : output -> client_id * bytes
   val debug : bool
   val debugInput : state -> input -> unit
   val debugRecv : state -> (name * msg) -> unit
@@ -162,8 +162,7 @@ module Shim (A: ARRANGEMENT) = struct
       print_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
-    let buf = Bytes.of_string (A.serializeMsg msg) in
-    sendto env.nodes_fd buf (denote_node env nm)
+    sendto env.nodes_fd (A.serializeMsg msg) (denote_node env nm)
 
   let send_to_client env fd buf =
     try ignore (Unix.send fd buf 0 (Bytes.length buf) [])
@@ -172,7 +171,8 @@ module Shim (A: ARRANGEMENT) = struct
 
   let output env o =
     let (c, out) = A.serializeOutput o in
-    let buf = Bytes.of_string (out ^ "\n") in
+    let buf = Bytes.extend out 0 1 in
+    Bytes.set buf (Bytes.length out) '\n';
     try send_to_client env (denote_client env c) buf
     with Not_found ->
       printf "output: failed to find socket for client %s" (A.serializeClientId c);
@@ -218,9 +218,8 @@ module Shim (A: ARRANGEMENT) = struct
   let input_step (fd : file_descr) (env : env) (state : A.state) =
     try
       let buf = read_from_client fd 1024 in
-      let str = Bytes.to_string buf in
       let c = undenote_client env fd in
-      match A.deserializeInput str c with
+      match A.deserializeInput buf c with
       | Some inp ->
         save env (LogInput inp) state;
         let state' = respond env (A.handleIO env.cfg.me inp state) in
@@ -241,8 +240,7 @@ module Shim (A: ARRANGEMENT) = struct
     let len = 65536 in
     let buf = Bytes.make len '\x00' in
     let (_, from) = recvfrom env.nodes_fd buf 0 len [] in
-    let str = Bytes.to_string buf in
-    let (src, msg) = (undenote_node env from, A.deserializeMsg str) in
+    let (src, msg) = (undenote_node env from, A.deserializeMsg buf) in
     save env (LogNet (src, msg)) state;
     let state' = respond env (A.handleNet env.cfg.me src msg state) in
     if A.debug then A.debugRecv state' (src, msg);
