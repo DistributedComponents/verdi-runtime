@@ -162,8 +162,7 @@ module Shim (A: ARRANGEMENT) = struct
       print_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
-    let buf = A.serializeMsg msg in
-    sendto env.nodes_fd buf (denote_node env nm)
+    sendto env.nodes_fd (A.serializeMsg msg) (denote_node env nm)
 
   let send_to_client env fd buf =
     try ignore (Unix.send fd buf 0 (Bytes.length buf) [])
@@ -172,7 +171,8 @@ module Shim (A: ARRANGEMENT) = struct
 
   let output env o =
     let (c, out) = A.serializeOutput o in
-    let buf = Bytes.of_string (Bytes.to_string out ^ "\n") in
+    let buf = Bytes.extend out 0 1 in
+    Bytes.set buf (Bytes.length out) '\n';
     try send_to_client env (denote_client env c) buf
     with Not_found ->
       printf "output: failed to find socket for client %s" (A.serializeClientId c);
@@ -218,7 +218,6 @@ module Shim (A: ARRANGEMENT) = struct
   let input_step (fd : file_descr) (env : env) (state : A.state) =
     try
       let buf = read_from_client fd 1024 in
-      let str = Bytes.to_string buf in
       let c = undenote_client env fd in
       match A.deserializeInput buf c with
       | Some inp ->
