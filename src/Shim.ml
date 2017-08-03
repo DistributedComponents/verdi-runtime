@@ -164,19 +164,22 @@ module Shim (A: ARRANGEMENT) = struct
   let send env ((nm : A.name), (msg : A.msg)) =
     sendto env.nodes_fd (A.serializeMsg msg) (denote_node env nm)
 
-  let send_to_client env fd buf =
-    try ignore (Unix.send fd buf 0 (Bytes.length buf) [])
-    with Unix_error (err, fn, arg) ->
-      disconnect_client env fd (sprintf "error in send_to_client: %s" (error_message err))
-
   let output env o =
     let (c, out) = A.serializeOutput o in
-    let buf = Bytes.extend out 0 1 in
-    Bytes.set buf (Bytes.length out) '\n';
-    try send_to_client env (denote_client env c) buf
-    with Not_found ->
+    try send_chunk (denote_client env c) out
+    with 
+    | Not_found ->
       printf "output: failed to find socket for client %s" (A.serializeClientId c);
       print_newline ()
+    | Disconnect s ->
+      disconnect_client env
+                        (denote_client env c)
+                        (sprintf "output: failed send to client %s: %s"
+                                 (A.serializeClientId c) s)
+    | Unix_error (err, fn, _) ->
+       disconnect_client env
+                         (denote_client env c)
+                         (sprintf "output: error %s" (error_message err))
 
   let save env (step : log_step) (st : A.state)  =
     if (env.saves > 0 && env.saves mod 1000 = 0) then begin
@@ -202,22 +205,9 @@ module Shim (A: ARRANGEMENT) = struct
     printf "client %s connected on %s" (A.serializeClientId c) (string_of_sockaddr client_addr);
     print_newline ()
 
-  exception Disconnect_client of string
-
-  let read_from_client fd len =
-    let buf1 = Bytes.make len '\x00' in
-    let bytes_read = recv fd buf1 0 len [MSG_PEEK] in
-    if bytes_read = 0 then raise (Disconnect_client "client closed socket");
-    let msg_len =
-      try (Bytes.index buf1 '\n') + 1
-      with Not_found -> raise (Disconnect_client "invalid data from client") in
-    let buf2 = Bytes.make msg_len '\x00' in
-    ignore (recv fd buf2 0 msg_len []);
-    buf1
-
   let input_step (fd : file_descr) (env : env) (state : A.state) =
     try
-      let buf = read_from_client fd 1024 in
+      let buf = receive_chunk fd in
       let c = undenote_client env fd in
       match A.deserializeInput buf c with
       | Some inp ->
@@ -229,7 +219,7 @@ module Shim (A: ARRANGEMENT) = struct
 	disconnect_client env fd "input deserialization failed";
 	state
     with
-    | Disconnect_client s ->
+    | Disconnect s ->
       disconnect_client env fd s;
       state
     | Unix_error (err, fn, _) ->
