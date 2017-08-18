@@ -110,12 +110,13 @@ exception Disconnect of string
 
 (* throws Unix_error, Disconnect *)
 let rec send_all fd buf len =
-  if len > 0 then
+  if len > 0 then begin
     let n = Unix.send fd buf 0 len [] in
     if n = 0 then raise (Disconnect "send_all: other side closed connection");
     let len' = len - n in
     let buf' = Bytes.sub buf n len' in
     send_all fd buf' len'
+  end
 
 (* throws Unix_error, Disconnect *)
 let send_chunk fd buf =
