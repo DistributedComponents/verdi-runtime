@@ -126,6 +126,38 @@ let send_chunk fd buf =
   send_all fd buf len
 
 (* throws Unix_error, Disconnect *)
+let recv_chunk fd ht =
+  if Hashtbl.mem ht fd then begin
+    let (rem, buf) = Hashtbl.find ht fd in
+    let len = Bytes.length buf in
+    let offset = len - rem in
+    let n = Unix.recv fd buf offset rem [] in
+    if n = 0 then raise (Disconnect "recv_chunk: other side closed connection");
+    if n < rem then begin
+      let rem' = rem - n in
+      Hashtbl.replace ht fd (rem', buf);
+      None
+    end else begin
+      Hashtbl.remove ht fd;
+      Some buf
+    end
+  end else begin
+    let buf = Bytes.make 4 '\x00' in
+    let n = Unix.recv fd buf 0 4 [] in
+    if n < 4 then raise (Disconnect "recv_chunk: message header did not arrive all at once");
+    let len = int_of_raw_bytes buf in
+    let buf = Bytes.make len '\x00' in
+    let n = Unix.recv fd buf 0 len [] in
+    if n < len then begin
+      let rem = len - n in
+      Hashtbl.add ht fd (rem, buf);
+      None
+    end else begin
+      Some buf
+    end
+  end
+
+(* throws Unix_error, Disconnect *)
 let receive_chunk fd =
   let receive_check fd buf offs len flags =
     let n = Unix.recv fd buf offs len flags in

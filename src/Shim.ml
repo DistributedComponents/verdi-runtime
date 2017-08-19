@@ -49,6 +49,7 @@ module Shim (A: ARRANGEMENT) = struct
       ; nodes : (A.name * sockaddr) list
       ; client_read_fds : (file_descr, A.client_id) Hashtbl.t
       ; client_write_fds : (A.client_id, file_descr) Hashtbl.t
+      ; client_read_bufs : (file_descr, int * bytes) Hashtbl.t
       ; mutable saves : int
       }
 
@@ -136,6 +137,7 @@ module Shim (A: ARRANGEMENT) = struct
       ; nodes = List.map addressify cfg.cluster
       ; client_read_fds = Hashtbl.create 17
       ; client_write_fds = Hashtbl.create 17
+      ; client_read_bufs = Hashtbl.create 17
       ; saves = 0
       }
     in
@@ -207,17 +209,21 @@ module Shim (A: ARRANGEMENT) = struct
 
   let input_step (fd : file_descr) (env : env) (state : A.state) =
     try
-      let buf = receive_chunk fd in
-      let c = undenote_client env fd in
-      match A.deserializeInput buf c with
-      | Some inp ->
-        save env (LogInput inp) state;
-        let state' = respond env (A.handleIO env.cfg.me inp state) in
-        if A.debug then A.debugInput state' inp;
-        state'
+      match recv_chunk fd env.client_read_bufs with
       | None ->
-	disconnect_client env fd "input deserialization failed";
 	state
+      | Some buf -> begin
+	let c = undenote_client env fd in
+	match A.deserializeInput buf c with
+	| Some inp ->
+          save env (LogInput inp) state;
+          let state' = respond env (A.handleIO env.cfg.me inp state) in
+          if A.debug then A.debugInput state' inp;
+          state'
+	| None ->
+	  disconnect_client env fd "input deserialization failed";
+	  state
+      end
     with
     | Disconnect s ->
       disconnect_client env fd s;
