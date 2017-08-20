@@ -144,6 +144,7 @@ let recv_chunk fd ht =
   end else begin
     let buf = Bytes.make 4 '\x00' in
     let n = Unix.recv fd buf 0 4 [] in
+    if n = 0 then raise (Disconnect "recv_chunk: other side closed connection");
     if n < 4 then raise (Disconnect "recv_chunk: message header did not arrive all at once");
     let len = int_of_raw_bytes buf in
     let buf = Bytes.make len '\x00' in
