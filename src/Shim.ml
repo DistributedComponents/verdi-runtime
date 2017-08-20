@@ -202,6 +202,7 @@ module Shim (A: ARRANGEMENT) = struct
   let new_client_conn env =
     let (client_fd, client_addr) = accept env.clients_fd in
     let c = A.createClientId () in
+    set_nonblock client_fd;
     Hashtbl.add env.client_read_fds client_fd c;
     Hashtbl.add env.client_write_fds c client_fd;
     printf "client %s connected on %s" (A.serializeClientId c) (string_of_sockaddr client_addr);
