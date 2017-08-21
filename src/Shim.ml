@@ -115,10 +115,9 @@ module Shim (A: ARRANGEMENT) = struct
   (* Load state from disk, initialize environment, and start server. *)
   let setup (cfg : cfg) : (env * A.state) =
     Random.self_init ();
-    let port = snd (List.assoc cfg.me cfg.cluster) in
     let addressify (name, (host, port)) =
       let entry = Unix.gethostbyname host in
-      (name, Unix.ADDR_INET (Array.get entry.Unix.h_addr_list 0, port))
+      (name, Unix.ADDR_INET (entry.Unix.h_addr_list.(0), port))
     in
     begin
       try
@@ -142,10 +141,14 @@ module Shim (A: ARRANGEMENT) = struct
       ; saves = 0
       }
     in
+    let (node_addr, node_port) =
+      match List.assoc cfg.me env.nodes with
+      | Unix.ADDR_INET (addr, port) -> (addr, port)
+      | _ -> assert false in
     Unix.setsockopt env.clients_fd Unix.SO_REUSEADDR true;
     Unix.setsockopt env.nodes_fd Unix.SO_REUSEADDR true;
-    Unix.bind env.nodes_fd (Unix.ADDR_INET (Unix.inet_addr_any, port));
-    Unix.bind env.clients_fd (Unix.ADDR_INET (Unix.inet_addr_any, cfg.port));
+    Unix.bind env.nodes_fd (Unix.ADDR_INET (node_addr, node_port));
+    Unix.bind env.clients_fd (Unix.ADDR_INET (node_addr, cfg.port));
     Unix.listen env.clients_fd 8;
     Unix.set_nonblock env.clients_fd;
     (env, initial_state)
