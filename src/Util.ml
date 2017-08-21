@@ -109,13 +109,11 @@ let keys_of_hashtbl h =
 exception Disconnect of string
 
 (* throws Unix_error, Disconnect *)
-let rec send_all fd buf len =
-  if len > 0 then begin
-    let n = Unix.send fd buf 0 len [] in
+let rec send_all fd buf offset len =
+  if offset < len then begin
+    let n = Unix.send fd buf offset (len - offset) [] in
     if n = 0 then raise (Disconnect "send_all: other side closed connection");
-    let len' = len - n in
-    let buf' = Bytes.sub buf n len' in
-    send_all fd buf' len'
+    send_all fd buf (offset + n) len
   end
 
 (* throws Unix_error, Disconnect *)
@@ -123,7 +121,7 @@ let send_chunk fd buf =
   let len = Bytes.length buf in
   let n = Unix.send fd (raw_bytes_of_int len) 0 4 [] in
   if n < 4 then raise (Disconnect "send_chunk: message header failed to send all at once");
-  send_all fd buf len
+  send_all fd buf 0 len
 
 (* throws Unix_error, Disconnect *)
 let recv_chunk fd ht =
