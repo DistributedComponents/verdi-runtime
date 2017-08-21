@@ -147,6 +147,7 @@ module Shim (A: ARRANGEMENT) = struct
     Unix.bind env.nodes_fd (Unix.ADDR_INET (Unix.inet_addr_any, port));
     Unix.bind env.clients_fd (Unix.ADDR_INET (Unix.inet_addr_any, cfg.port));
     Unix.listen env.clients_fd 8;
+    Unix.set_nonblock env.clients_fd;
     (env, initial_state)
 
   let disconnect_client env fd reason =
