@@ -1,5 +1,4 @@
 open Printf
-open Unix
 open Util
 
 let _CLOG = "clog.bin"
@@ -44,12 +43,12 @@ module Shim (A: ARRANGEMENT) = struct
   type env =
       { cfg : cfg
       ; command_log : out_channel
-      ; nodes_fd : file_descr
-      ; clients_fd : file_descr
-      ; nodes : (A.name * sockaddr) list
-      ; client_read_fds : (file_descr, A.client_id) Hashtbl.t
-      ; client_write_fds : (A.client_id, file_descr) Hashtbl.t
-      ; client_read_bufs : (file_descr, int * bytes) Hashtbl.t
+      ; nodes_fd : Unix.file_descr
+      ; clients_fd : Unix.file_descr
+      ; nodes : (A.name * Unix.sockaddr) list
+      ; client_read_fds : (Unix.file_descr, A.client_id) Hashtbl.t
+      ; client_write_fds : (A.client_id, Unix.file_descr) Hashtbl.t
+      ; client_read_bufs : (Unix.file_descr, int * bytes) Hashtbl.t
       ; mutable saves : int
       }
 
@@ -65,20 +64,20 @@ module Shim (A: ARRANGEMENT) = struct
   | LogTimeout
 
   (* Translate node name to UDP socket address. *)
-  let denote_node (env : env) (name : A.name) : sockaddr =
+  let denote_node (env : env) (name : A.name) : Unix.sockaddr =
     List.assoc name env.nodes
 
   (* Translate UDP socket address to node name. *)
-  let undenote_node (env : env) (addr : sockaddr) : A.name =
+  let undenote_node (env : env) (addr : Unix.sockaddr) : A.name =
     let flip = function (x, y) -> (y, x) in
     List.assoc addr (List.map flip env.nodes)
 
   (* Translate client id to TCP socket address *)
-  let denote_client (env : env) (c : A.client_id) : file_descr =
+  let denote_client (env : env) (c : A.client_id) : Unix.file_descr =
     Hashtbl.find env.client_write_fds c
 
   (* Translate TCP socket address to client id *)
-  let undenote_client (env : env) (fd : file_descr) : A.client_id =
+  let undenote_client (env : env) (fd : Unix.file_descr) : A.client_id =
     Hashtbl.find env.client_read_fds fd
 
   (* Return state with a single entry from the log applied to the given state. *)
@@ -118,22 +117,24 @@ module Shim (A: ARRANGEMENT) = struct
     Random.self_init ();
     let port = snd (List.assoc cfg.me cfg.cluster) in
     let addressify (name, (host, port)) =
-      let entry = gethostbyname host in
-      (name, ADDR_INET (Array.get entry.h_addr_list 0, port))
+      let entry = Unix.gethostbyname host in
+      (name, Unix.ADDR_INET (Array.get entry.Unix.h_addr_list 0, port))
     in
     begin
       try
-        mkdir cfg.dbpath 0o700
-      with Unix_error (err, fn, param) ->
-        if err != EEXIST then
-          raise (Unix_error (err, fn, param))
+        Unix.mkdir cfg.dbpath 0o700
+      with Unix.Unix_error (err, fn, param) ->
+        if err != Unix.EEXIST then
+          raise (Unix.Unix_error (err, fn, param))
     end;
     let initial_state = A.reboot (restore cfg) in
     let env =
       { cfg = cfg
-      ; command_log = out_channel_of_descr (openfile (command_log_path cfg) [O_WRONLY ; O_APPEND ; O_CREAT ; O_DSYNC] 0o640)
-      ; nodes_fd = socket PF_INET SOCK_DGRAM 0
-      ; clients_fd = socket PF_INET SOCK_STREAM 0
+      ; command_log = Unix.out_channel_of_descr
+	  (Unix.openfile (command_log_path cfg)
+	     [Unix.O_WRONLY ; Unix.O_APPEND ; Unix.O_CREAT ; Unix.O_DSYNC] 0o640)
+      ; nodes_fd = Unix.socket Unix.PF_INET Unix.SOCK_DGRAM 0
+      ; clients_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
       ; nodes = List.map addressify cfg.cluster
       ; client_read_fds = Hashtbl.create 17
       ; client_write_fds = Hashtbl.create 17
@@ -141,26 +142,26 @@ module Shim (A: ARRANGEMENT) = struct
       ; saves = 0
       }
     in
-    setsockopt env.clients_fd SO_REUSEADDR true;
-    setsockopt env.nodes_fd SO_REUSEADDR true;
-    bind env.nodes_fd (ADDR_INET (inet_addr_any, port));
-    bind env.clients_fd (ADDR_INET (inet_addr_any, cfg.port));
-    listen env.clients_fd 8;
+    Unix.setsockopt env.clients_fd Unix.SO_REUSEADDR true;
+    Unix.setsockopt env.nodes_fd Unix.SO_REUSEADDR true;
+    Unix.bind env.nodes_fd (Unix.ADDR_INET (Unix.inet_addr_any, port));
+    Unix.bind env.clients_fd (Unix.ADDR_INET (Unix.inet_addr_any, cfg.port));
+    Unix.listen env.clients_fd 8;
     (env, initial_state)
 
   let disconnect_client env fd reason =
     let c = undenote_client env fd in
     Hashtbl.remove env.client_read_fds fd;
     Hashtbl.remove env.client_write_fds c;
-    close fd;
+    Unix.close fd;
     printf "client %s disconnected: %s" (A.serializeClientId c) reason;
     print_newline ()
 
   let sendto sock buf addr =
     try
       ignore (Unix.sendto sock buf 0 (Bytes.length buf) [] addr)
-    with Unix_error (err, fn, arg) ->
-      printf "error in sendto: %s, dropping message" (error_message err);
+    with Unix.Unix_error (err, fn, arg) ->
+      printf "error in sendto: %s, dropping message" (Unix.error_message err);
       print_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
@@ -178,17 +179,19 @@ module Shim (A: ARRANGEMENT) = struct
                         (denote_client env c)
                         (sprintf "output: failed send to client %s: %s"
                                  (A.serializeClientId c) s)
-    | Unix_error (err, fn, _) ->
+    | Unix.Unix_error (err, fn, _) ->
        disconnect_client env
                          (denote_client env c)
-                         (sprintf "output: error %s" (error_message err))
+                         (sprintf "output: error %s" (Unix.error_message err))
 
   let save env (step : log_step) (st : A.state)  =
     if (env.saves > 0 && env.saves mod 1000 = 0) then begin
       print_endline "snapshotting";
-      let csnap = out_channel_of_descr (openfile (snapshot_path env.cfg) [O_WRONLY ; O_TRUNC ; O_CREAT ; O_DSYNC] 0o640) in
+      let csnap = Unix.out_channel_of_descr
+	(Unix.openfile (snapshot_path env.cfg)
+	   [Unix.O_WRONLY ; Unix.O_TRUNC ; Unix.O_CREAT ; Unix.O_DSYNC] 0o640) in
       Marshal.to_channel csnap st []; flush csnap; close_out csnap;
-      ftruncate (descr_of_out_channel env.command_log) 0
+      Unix.ftruncate (Unix.descr_of_out_channel env.command_log) 0
     end;
     Marshal.to_channel env.command_log step [];
     flush env.command_log;
@@ -200,15 +203,15 @@ module Shim (A: ARRANGEMENT) = struct
     s
 
   let new_client_conn env =
-    let (client_fd, client_addr) = accept env.clients_fd in
+    let (client_fd, client_addr) = Unix.accept env.clients_fd in
     let c = A.createClientId () in
-    set_nonblock client_fd;
+    Unix.set_nonblock client_fd;
     Hashtbl.add env.client_read_fds client_fd c;
     Hashtbl.add env.client_write_fds c client_fd;
     printf "client %s connected on %s" (A.serializeClientId c) (string_of_sockaddr client_addr);
     print_newline ()
 
-  let input_step (fd : file_descr) (env : env) (state : A.state) =
+  let input_step (fd : Unix.file_descr) (env : env) (state : A.state) =
     try
       match recv_chunk fd env.client_read_bufs with
       | None ->
@@ -229,14 +232,14 @@ module Shim (A: ARRANGEMENT) = struct
     | Disconnect s ->
       disconnect_client env fd s;
       state
-    | Unix_error (err, fn, _) ->
-      disconnect_client env fd (sprintf "error in %s: %s" fn (error_message err));
+    | Unix.Unix_error (err, fn, _) ->
+      disconnect_client env fd (sprintf "error in %s: %s" fn (Unix.error_message err));
       state
 
   let recv_step (env : env) (state : A.state) : A.state =
     let len = 65536 in
     let buf = Bytes.make len '\x00' in
-    let (_, from) = recvfrom env.nodes_fd buf 0 len [] in
+    let (_, from) = Unix.recvfrom env.nodes_fd buf 0 len [] in
     let (src, msg) = (undenote_node env from, A.deserializeMsg buf) in
     save env (LogNet (src, msg)) state;
     let state' = respond env (A.handleNet env.cfg.me src msg state) in
