@@ -157,6 +157,7 @@ module Shim (A: ARRANGEMENT) = struct
     let c = undenote_client env fd in
     Hashtbl.remove env.client_read_fds fd;
     Hashtbl.remove env.client_write_fds c;
+    Hashtbl.remove env.client_read_bufs fd;
     Unix.close fd;
     printf "client %s disconnected: %s" (A.serializeClientId c) reason;
     print_newline ()
@@ -179,14 +180,11 @@ module Shim (A: ARRANGEMENT) = struct
       printf "output: failed to find socket for client %s" (A.serializeClientId c);
       print_newline ()
     | Disconnect s ->
-      disconnect_client env
-                        (denote_client env c)
-                        (sprintf "output: failed send to client %s: %s"
-                                 (A.serializeClientId c) s)
+      disconnect_client env (denote_client env c)
+        (sprintf "output: failed send to client %s: %s" (A.serializeClientId c) s)
     | Unix.Unix_error (err, fn, _) ->
-       disconnect_client env
-                         (denote_client env c)
-                         (sprintf "output: error %s" (Unix.error_message err))
+       disconnect_client env (denote_client env c)
+         (sprintf "output: error %s" (Unix.error_message err))
 
   let save env (step : log_step) (st : A.state)  =
     if (env.saves > 0 && env.saves mod 1000 = 0) then begin
