@@ -130,6 +130,7 @@ module Shim (A: ARRANGEMENT) = struct
   let new_client_conn env =
     let (client_fd, client_addr) = Unix.accept env.clients_fd in
     let c = A.create_client_id () in
+    Unix.set_nonblock client_fd;
     Hashtbl.replace env.client_read_fds client_fd c;
     Hashtbl.replace env.client_write_fds c client_fd;
     if A.debug then begin
@@ -184,10 +185,13 @@ module Shim (A: ARRANGEMENT) = struct
       print_newline ()
     end;
     let (node_read_fd, node_addr) = Unix.accept env.nodes_fd in
+    Unix.set_nonblock node_read_fd;
     let name_buf = 
       try receive_chunk node_read_fd
       with
-      | Disconnect s -> Unix.close node_read_fd; raise (Disconnect s)
+      | Disconnect s ->
+	Unix.close node_read_fd;
+	raise (Disconnect s)
       | Unix.Unix_error (err, fn, _) ->
 	Unix.close node_read_fd;
 	raise (Disconnect (sprintf "new_node_conn: error in %s: %s" fn (Unix.error_message err)))
