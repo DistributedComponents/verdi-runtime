@@ -44,8 +44,8 @@ exception Disconnect of string
 
 val send_chunk : Unix.file_descr -> bytes -> unit
 
-val recv_chunk : Unix.file_descr -> (Unix.file_descr, int * bytes) Hashtbl.t -> bytes option
+val recv_buf_chunk : Unix.file_descr -> (Unix.file_descr, int * bytes) Hashtbl.t -> bytes option
 
-val receive_chunk : Unix.file_descr -> bytes
+val recv_full_chunk : Unix.file_descr -> bytes
 
 val arr_of_string : string -> string array

@@ -215,7 +215,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   let input_step (fd : Unix.file_descr) (env : env) (state : A.state) =
     try
-      match recv_chunk fd env.client_read_bufs with
+      match recv_buf_chunk fd env.client_read_bufs with
       | None ->
 	state
       | Some buf -> begin

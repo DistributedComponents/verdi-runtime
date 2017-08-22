@@ -52,6 +52,7 @@ module Shim (A: ARRANGEMENT) = struct
       ; client_read_fds : (Unix.file_descr, A.client_id) Hashtbl.t
       ; client_write_fds : (A.client_id, Unix.file_descr) Hashtbl.t
       ; tasks : (Unix.file_descr, (env, A.state) task) Hashtbl.t
+      ; read_bufs : (Unix.file_descr, int * bytes) Hashtbl.t
       }
 
   let sock_of_name (env : env) (node_name : A.name) : string * int =
@@ -93,6 +94,7 @@ module Shim (A: ARRANGEMENT) = struct
       ; client_read_fds = Hashtbl.create 17
       ; client_write_fds = Hashtbl.create 17
       ; tasks = Hashtbl.create 17
+      ; read_bufs = Hashtbl.create 17
       } in
     let initial_state = get_initial_state env in
     List.iter (fun (n, s) -> Hashtbl.add env.cluster n s) cfg.cluster;
@@ -187,7 +189,7 @@ module Shim (A: ARRANGEMENT) = struct
     let (node_read_fd, node_addr) = Unix.accept env.nodes_fd in
     Unix.set_nonblock node_read_fd;
     let name_buf = 
-      try receive_chunk node_read_fd
+      try recv_full_chunk node_read_fd
       with
       | Disconnect s ->
 	Unix.close node_read_fd;
@@ -202,21 +204,28 @@ module Shim (A: ARRANGEMENT) = struct
       raise (Disconnect (sprintf "new_node_conn: failed to deserialize name %s" (Bytes.to_string name_buf)))
     | Some node_name ->
       let sock_buf =
-	try receive_chunk node_read_fd
+	try recv_full_chunk node_read_fd
 	with
-	| Disconnect s -> Unix.close node_read_fd; raise (Disconnect s)
+	| Disconnect s ->
+	  Unix.close node_read_fd;
+	  raise (Disconnect s)
 	| Unix.Unix_error (err, fn, _) ->
-	  Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: error in %s: %s" fn (Unix.error_message err)))
+	  Unix.close node_read_fd;
+	  raise (Disconnect (sprintf "new_node_conn: error in %s: %s" fn (Unix.error_message err)))
       in
       let sock_str = Bytes.to_string sock_buf in
       let sock =
 	try Scanf.sscanf sock_str "%[^:]:%d" (fun i p -> (i, p))
-	with _ -> Unix.close node_read_fd; raise (Disconnect (sprintf "new_node_conn: sscanf error %s" sock_str))
+	with _ ->
+	  Unix.close node_read_fd;
+	  raise (Disconnect (sprintf "new_node_conn: sscanf error %s" sock_str))
       in
       Hashtbl.replace env.cluster node_name sock;
       begin
 	try ignore (get_write_node_fd env node_name)
-	with Disconnect s -> Unix.close node_read_fd; raise (Disconnect s)
+	with Disconnect s ->
+	  Unix.close node_read_fd;
+	  raise (Disconnect s)
       end;
       Hashtbl.replace env.node_read_fds node_read_fd node_name;
       Hashtbl.replace env.node_fds_read node_name node_read_fd;
@@ -275,26 +284,32 @@ module Shim (A: ARRANGEMENT) = struct
     state'
 
   (* throws Disconnect, Unix_error *)
-  let recv_step (env : env) (fd : Unix.file_descr) (state : A.state) : A.state =
-    let buf = receive_chunk fd in
-    let src =
-      try undenote_node env fd
-      with Not_found -> failwith "recv_step: failed to find source for message"
-    in
-    let msg = A.deserialize_msg buf in
-    deliver_msg env state src msg
+  let msg_step (env : env) (fd : Unix.file_descr) (state : A.state) : A.state =
+    match recv_buf_chunk fd env.read_bufs with
+    | None ->
+      state
+    | Some buf ->
+      let src =
+	try undenote_node env fd
+	with Not_found -> failwith "msg_step: failed to find source for message"
+      in
+      let msg = A.deserialize_msg buf in
+      deliver_msg env state src msg
 
   (* throws Disconnect, Unix_error *)
   let input_step (env : env) (fd : Unix.file_descr) (state : A.state) =
-    let buf = receive_chunk fd in
-    let c = undenote_client env fd in
-    match A.deserialize_input buf c with
-    | Some inp ->
-      let state' = respond env (A.handle_input env.me inp state) in
-      if A.debug then A.debug_input state' inp;
-      state'
+    match recv_buf_chunk fd env.read_bufs with
     | None ->
-      raise (Disconnect (sprintf "input_step: could not deserialize %s" (Bytes.to_string buf)))
+      state
+    | Some buf ->
+      let c = undenote_client env fd in
+      match A.deserialize_input buf c with
+      | Some inp ->
+	let state' = respond env (A.handle_input env.me inp state) in
+	if A.debug then A.debug_input state' inp;
+	state'
+      | None ->
+	raise (Disconnect (sprintf "input_step: could not deserialize %s" (Bytes.to_string buf)))
 
   let node_read_task fd =
     { fd = fd
@@ -303,7 +318,7 @@ module Shim (A: ARRANGEMENT) = struct
     ; process_read =
 	(fun t env state ->
 	  try
-	    let state' = recv_step env t.fd state in
+	    let state' = msg_step env t.fd state in
 	    (false, [], state')
 	  with 
 	  | Disconnect s ->
@@ -327,6 +342,7 @@ module Shim (A: ARRANGEMENT) = struct
 	  Hashtbl.remove env.node_read_fds read_fd;
 	  Hashtbl.remove env.node_fds_read node_name;
 	  Hashtbl.remove env.node_write_fds node_name;
+	  Hashtbl.remove env.read_bufs read_fd;
 	  Hashtbl.remove env.cluster node_name;
 	  Unix.close read_fd;
 	  Unix.close write_fd;
@@ -364,6 +380,7 @@ module Shim (A: ARRANGEMENT) = struct
 	  end;
 	  Hashtbl.remove env.client_read_fds client_fd;
 	  Hashtbl.remove env.client_write_fds c;
+	  Hashtbl.remove env.read_bufs client_fd;
 	  Unix.close client_fd;
 	  state)
     }

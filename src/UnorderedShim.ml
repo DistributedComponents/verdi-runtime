@@ -142,7 +142,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   (* throws Disconnect, Unix_error *)
   let input_step (env : env) (fd : file_descr) (state : A.state) =
-    let buf = receive_chunk fd in
+    let buf = recv_full_chunk fd in
     let c = undenote_client env fd in
     match A.deserialize_input buf c with
     | Some inp ->
