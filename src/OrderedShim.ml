@@ -80,6 +80,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   (* Initialize environment *)
   let setup (cfg : cfg) : (env * A.state) =
+    Hashtbl.randomize ();
     Random.self_init ();
     let env =
       { cluster = Hashtbl.create (List.length cfg.cluster)
