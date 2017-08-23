@@ -218,7 +218,7 @@ module Shim (A: ARRANGEMENT) = struct
       match recv_buf_chunk fd env.client_read_bufs with
       | None ->
 	state
-      | Some buf -> begin
+      | Some buf ->
 	let c = undenote_client env fd in
 	match A.deserializeInput buf c with
 	| Some inp ->
@@ -229,7 +229,6 @@ module Shim (A: ARRANGEMENT) = struct
 	| None ->
 	  disconnect_client env fd "input deserialization failed";
 	  state
-      end
     with
     | Disconnect s ->
       disconnect_client env fd s;
@@ -238,7 +237,7 @@ module Shim (A: ARRANGEMENT) = struct
       disconnect_client env fd (sprintf "error in %s: %s" fn (Unix.error_message err));
       state
 
-  let recv_step (env : env) (state : A.state) : A.state =
+  let msg_step (env : env) (state : A.state) : A.state =
     let len = 65536 in
     let buf = Bytes.make len '\x00' in
     let (_, from) = Unix.recvfrom env.nodes_fd buf 0 len [] in
@@ -258,7 +257,7 @@ module Shim (A: ARRANGEMENT) = struct
     if fd = env.clients_fd then
       begin new_client_conn env; state end
     else if fd = env.nodes_fd then
-      recv_step env state
+      msg_step env state
     else
       input_step fd env state
 
