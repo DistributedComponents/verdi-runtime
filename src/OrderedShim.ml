@@ -42,7 +42,6 @@ module Shim (A: ARRANGEMENT) = struct
 
   type env =
       { cluster : (A.name, string * int) Hashtbl.t
-      ; port : int
       ; me : A.name
       ; nodes_fd : Unix.file_descr
       ; clients_fd : Unix.file_descr
@@ -84,7 +83,6 @@ module Shim (A: ARRANGEMENT) = struct
     let initial_state = get_initial_state cfg in
     let env =
       { cluster = Hashtbl.create (List.length cfg.cluster)
-      ; port = cfg.port
       ; me = cfg.me
       ; nodes_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
       ; clients_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
@@ -103,7 +101,7 @@ module Shim (A: ARRANGEMENT) = struct
     Unix.setsockopt env.nodes_fd Unix.SO_REUSEADDR true;
     Unix.setsockopt env.clients_fd Unix.SO_REUSEADDR true;
     Unix.bind env.nodes_fd (Unix.ADDR_INET (listen_addr, port));
-    Unix.bind env.clients_fd (Unix.ADDR_INET (listen_addr, env.port));
+    Unix.bind env.clients_fd (Unix.ADDR_INET (listen_addr, cfg.port));
     Unix.listen env.nodes_fd 8;
     Unix.listen env.clients_fd 8;
     Unix.set_nonblock env.nodes_fd;
