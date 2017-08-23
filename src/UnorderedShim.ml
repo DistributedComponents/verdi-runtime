@@ -150,7 +150,6 @@ module Shim (A: ARRANGEMENT) = struct
     | None ->
       state
     | Some buf ->
-      let buf = recv_full_chunk fd in
       let c = undenote_client env fd in
       match A.deserialize_input buf c with
       | Some inp ->
