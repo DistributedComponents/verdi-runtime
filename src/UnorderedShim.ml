@@ -133,8 +133,8 @@ module Shim (A: ARRANGEMENT) = struct
     try
       ignore (Unix.sendto sock buf 0 (Bytes.length buf) [] addr)
     with Unix.Unix_error (err, fn, arg) ->
-      printf "error in sendto: %s, dropping message" (Unix.error_message err);
-      print_newline ()
+      eprintf "error in sendto: %s, dropping message" (Unix.error_message err);
+      prerr_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
     sendto env.nodes_fd (A.serialize_msg msg) (denote_node env nm)

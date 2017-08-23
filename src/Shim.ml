@@ -159,15 +159,17 @@ module Shim (A: ARRANGEMENT) = struct
     Hashtbl.remove env.client_write_fds c;
     Hashtbl.remove env.client_read_bufs fd;
     Unix.close fd;
-    printf "client %s disconnected: %s" (A.string_of_client_id c) reason;
-    print_newline ()
+    if A.debug then begin
+      printf "client %s disconnected: %s" (A.string_of_client_id c) reason;
+      print_newline ()
+    end
 
   let sendto sock buf addr =
     try
       ignore (Unix.sendto sock buf 0 (Bytes.length buf) [] addr)
     with Unix.Unix_error (err, fn, arg) ->
-      printf "error in sendto: %s, dropping message" (Unix.error_message err);
-      print_newline ()
+      eprintf "error in sendto: %s, dropping message" (Unix.error_message err);
+      prerr_newline ()
 
   let send env ((nm : A.name), (msg : A.msg)) =
     sendto env.nodes_fd (A.serialize_msg msg) (denote_node env nm)
@@ -177,8 +179,8 @@ module Shim (A: ARRANGEMENT) = struct
     try send_chunk (denote_client env c) out
     with 
     | Not_found ->
-      printf "output: failed to find socket for client %s" (A.string_of_client_id c);
-      print_newline ()
+      eprintf "output: failed to find socket for client %s" (A.string_of_client_id c);
+      prerr_newline ()
     | Disconnect s ->
       disconnect_client env (denote_client env c)
         (sprintf "output: failed send to client %s: %s" (A.string_of_client_id c) s)
@@ -188,7 +190,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   let save env (step : log_step) (st : A.state)  =
     if (env.saves > 0 && env.saves mod 1000 = 0) then begin
-      print_endline "snapshotting";
+      if A.debug then print_endline "snapshotting";
       let csnap = Unix.out_channel_of_descr
 	(Unix.openfile (snapshot_path env.cfg)
 	   [Unix.O_WRONLY ; Unix.O_TRUNC ; Unix.O_CREAT ; Unix.O_DSYNC] 0o640) in
@@ -210,8 +212,10 @@ module Shim (A: ARRANGEMENT) = struct
     Unix.set_nonblock client_fd;
     Hashtbl.add env.client_read_fds client_fd c;
     Hashtbl.add env.client_write_fds c client_fd;
-    printf "client %s connected on %s" (A.string_of_client_id c) (string_of_sockaddr client_addr);
-    print_newline ()
+    if A.debug then begin
+      printf "client %s connected on %s" (A.string_of_client_id c) (string_of_sockaddr client_addr);
+      print_newline ()
+    end
 
   let input_step (fd : Unix.file_descr) (env : env) (state : A.state) =
     try
