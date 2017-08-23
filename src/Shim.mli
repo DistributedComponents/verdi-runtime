@@ -6,24 +6,24 @@ module type ARRANGEMENT = sig
   type msg
   type client_id
   type res = (output list * state) * ((name * msg) list)
-  val systemName : string
+  val system_name : string
   val init : name -> state
   val reboot : state -> state
-  val handleIO : name -> input -> state -> res
-  val handleNet : name -> name -> msg -> state -> res
-  val handleTimeout : name -> state -> res
-  val setTimeout : name -> state -> float
-  val deserializeMsg : bytes -> msg
-  val serializeMsg : msg -> bytes
-  val deserializeInput : bytes -> client_id -> input option
-  val serializeOutput : output -> client_id * bytes
+  val handle_input : name -> input -> state -> res
+  val handle_msg : name -> name -> msg -> state -> res
+  val handle_timeout : name -> state -> res
+  val set_timeout : name -> state -> float
+  val deserialize_msg : bytes -> msg
+  val serialize_msg : msg -> bytes
+  val deserialize_input : bytes -> client_id -> input option
+  val serialize_output : output -> client_id * bytes
   val debug : bool
-  val debugInput : state -> input -> unit
-  val debugRecv : state -> (name * msg) -> unit
+  val debug_input : state -> input -> unit
+  val debug_recv : state -> (name * msg) -> unit
   val debugSend : state -> (name * msg) -> unit
-  val debugTimeout : state -> unit
-  val createClientId : unit -> client_id
-  val serializeClientId : client_id -> string
+  val debug_timeout : state -> unit
+  val create_client_id : unit -> client_id
+  val string_of_client_id : client_id -> string
 end
 
 module Shim :
