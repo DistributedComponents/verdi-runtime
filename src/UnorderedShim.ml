@@ -37,7 +37,7 @@ module Shim (A: ARRANGEMENT) = struct
       }
 
   type env =
-      { cfg : cfg
+      { me : A.name
       ; nodes_fd : Unix.file_descr
       ; clients_fd : Unix.file_descr
       ; nodes : (A.name * Unix.sockaddr) list
@@ -77,7 +77,7 @@ module Shim (A: ARRANGEMENT) = struct
     Random.self_init ();
     let initial_state = get_initial_state cfg in
     let env =
-      { cfg = cfg
+      { me = cfg.me
       ; nodes_fd = Unix.socket Unix.PF_INET Unix.SOCK_DGRAM 0
       ; clients_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
       ; nodes = List.map addressify cfg.cluster
@@ -153,7 +153,7 @@ module Shim (A: ARRANGEMENT) = struct
       let c = undenote_client env fd in
       match A.deserialize_input buf c with
       | Some inp ->
-	let state' = respond env (A.handle_input env.cfg.me inp state) in
+	let state' = respond env (A.handle_input env.me inp state) in
 	if A.debug then A.debug_input state' inp;
 	state'
       | None ->
@@ -165,7 +165,7 @@ module Shim (A: ARRANGEMENT) = struct
     let buf = Bytes.make len '\x00' in
     let (_, from) = Unix.recvfrom fd buf 0 len [] in
     let (src, msg) = (undenote_node env from, A.deserialize_msg buf) in
-    let state' = respond env (A.handle_msg env.cfg.me src msg state) in
+    let state' = respond env (A.handle_msg env.me src msg state) in
     if A.debug then A.debug_recv_msg state' (src, msg);
     state'
 
@@ -244,8 +244,8 @@ module Shim (A: ARRANGEMENT) = struct
     ; process_read = (fun t env state -> (false, [], state))
     ; process_wake =
 	(fun t env state ->
-	  let state' = respond env (handler env.cfg.me state) in
-	  match setter env.cfg.me state' with
+	  let state' = respond env (handler env.me state) in
+	  match setter env.me state' with
 	  | None -> (true, [], state')
 	  | Some time' -> begin
 	    t.wake_time <- Some time';
@@ -263,7 +263,7 @@ module Shim (A: ARRANGEMENT) = struct
     Hashtbl.add env.tasks t_nd_conn.fd t_nd_conn;
     Hashtbl.add env.tasks t_cl_conn.fd t_cl_conn;
     List.iter (fun (handler, setter) ->
-      match setter env.cfg.me initial_state with
+      match setter env.me initial_state with
       | None -> ()
       | Some time ->
 	let t = timeout_task env handler setter time in
