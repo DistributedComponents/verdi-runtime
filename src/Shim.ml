@@ -259,7 +259,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   let process_fd env state fd : A.state =
     if fd = env.clients_fd then
-      begin new_client_conn env; state end
+      (new_client_conn env; state)
     else if fd = env.nodes_fd then
       msg_step env state
     else
