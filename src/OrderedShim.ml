@@ -75,13 +75,13 @@ module Shim (A: ARRANGEMENT) = struct
     Hashtbl.find env.client_read_fds fd
 
   (* Gets initial state from the arrangement *)
-  let get_initial_state (env : env) : A.state =
-    A.init env.me
+  let get_initial_state (cfg : cfg) : A.state =
+    A.init cfg.me
 
   (* Initialize environment *)
   let setup (cfg : cfg) : (env * A.state) =
-    Hashtbl.randomize ();
     Random.self_init ();
+    let initial_state = get_initial_state cfg in
     let env =
       { cluster = Hashtbl.create (List.length cfg.cluster)
       ; port = cfg.port
@@ -96,18 +96,17 @@ module Shim (A: ARRANGEMENT) = struct
       ; tasks = Hashtbl.create 17
       ; read_bufs = Hashtbl.create 17
       } in
-    let initial_state = get_initial_state env in
     List.iter (fun (n, s) -> Hashtbl.add env.cluster n s) cfg.cluster;
     let (hostname, port) = Hashtbl.find env.cluster env.me in
     let entry = Unix.gethostbyname hostname in
-    let listen_ip = entry.Unix.h_addr_list.(0) in
+    let listen_addr = entry.Unix.h_addr_list.(0) in
     Unix.setsockopt env.nodes_fd Unix.SO_REUSEADDR true;
     Unix.setsockopt env.clients_fd Unix.SO_REUSEADDR true;
-    Unix.bind env.nodes_fd (Unix.ADDR_INET (listen_ip, port));
-    Unix.bind env.clients_fd (Unix.ADDR_INET (listen_ip, env.port));
+    Unix.bind env.nodes_fd (Unix.ADDR_INET (listen_addr, port));
+    Unix.bind env.clients_fd (Unix.ADDR_INET (listen_addr, env.port));
     Unix.listen env.nodes_fd 8;
-    Unix.set_nonblock env.nodes_fd;
     Unix.listen env.clients_fd 8;
+    Unix.set_nonblock env.nodes_fd;
     Unix.set_nonblock env.clients_fd;
     (env, initial_state)
 
