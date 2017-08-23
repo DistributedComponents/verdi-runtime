@@ -266,8 +266,7 @@ module Shim (A: ARRANGEMENT) = struct
       input_step fd env state
 
   let rec eloop (env : env) (state : A.state) : unit =
-    let client_fds = Hashtbl.fold (fun fd _ acc -> fd :: acc) env.client_read_fds [] in
-    let all_fds = env.nodes_fd :: env.clients_fd :: client_fds in
+    let all_fds = env.nodes_fd :: env.clients_fd :: keys_of_hashtbl env.client_read_fds in
     let (ready_fds, _, _) = select_unintr all_fds [] [] (A.set_timeout env.cfg.me state) in
     let state' =
       match ready_fds with
