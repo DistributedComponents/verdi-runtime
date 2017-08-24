@@ -26,7 +26,7 @@ module type ARRANGEMENT = sig
   val debug : bool
   val debug_input : state -> input -> unit
   val debug_recv : state -> (name * msg) -> unit
-  val debugSend : state -> (name * msg) -> unit
+  val debug_send : state -> (name * msg) -> unit
   val debug_timeout : state -> unit
   val create_client_id : unit -> client_id
   val string_of_client_id : client_id -> string
