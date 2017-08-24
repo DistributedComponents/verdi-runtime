@@ -30,7 +30,6 @@ module Shim (A: ARRANGEMENT) = struct
     ; listen_fd : Unix.file_descr
     ; read_fds : (Unix.file_descr, A.name) Hashtbl.t
     ; write_fds : (A.name, Unix.file_descr) Hashtbl.t
-    ; mutable last_tick : float
     ; tasks : (Unix.file_descr, (env, A.state * (float * A.timeout) list) task) Hashtbl.t
     }
 
@@ -41,7 +40,6 @@ module Shim (A: ARRANGEMENT) = struct
       ; listen_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
       ; read_fds = Hashtbl.create 17
       ; write_fds = Hashtbl.create 17
-      ; last_tick = Unix.gettimeofday ()
       ; tasks = Hashtbl.create 17
       } in
     let hostname, listen_port = A.addr_of_name env.me in
@@ -62,8 +60,23 @@ module Shim (A: ARRANGEMENT) = struct
     let add_time t = (now +. A.set_timeout t, t) in
     List.map add_time ts
 
+  let connect_write_fd env nm =
+    let (hostname, port) = A.addr_of_name nm in
+    let entry = Unix.gethostbyname hostname in
+    let addr = entry.Unix.h_addr_list.(0) in
+    let write_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+    Unix.connect write_fd (Unix.ADDR_INET (addr, port));
+    Hashtbl.add env.write_fds nm write_fd;
+    write_fd
+
+  (* throws Disconnect, Unix_error *)
   let send_msg env (dst, msg) =
-    ()
+    let write_fd =
+      try Hashtbl.find env.write_fds dst
+      with Not_found -> connect_write_fd env dst
+    in
+    let buf = A.serialize_msg msg in
+    send_chunk write_fd buf
 
   let respond env ts (s, ps, newts, clearedts) =
     let ts' = filter_cleared clearedts ts @ add_times newts in
@@ -197,13 +210,32 @@ module Shim (A: ARRANGEMENT) = struct
     ; finalize = (fun t env (state, ts) -> Unix.close t.fd; (state, ts))
     }
 
+  let timeout_step_task env time =
+    { fd = Unix.dup env.listen_fd
+    ; select_on = false
+    ; wake_time = Some time
+    ; process_read = (fun t env (state, ts) -> (false, [], (state, ts)))
+    ; process_wake =
+	(fun t env (state, ts) ->
+	  let (state', ts') = timeout_step env state ts in
+	  let time' = free_time ts' in
+	  t.wake_time <- Some time';
+	  (false, [], (state', ts')))
+    ; finalize = (fun t env (state, ts) -> Unix.close t.fd; (state, ts))
+    }
+
   let main me_addr known_addrs : unit =
     printf "dynamic shim running setup";
     print_newline ();
     let me = A.name_of_addr me_addr in
     let env = setup me in
     let known_names = List.map A.name_of_addr known_addrs in
+    let (init_state, init_ts) = respond env [] (init env.me known_names) in
+    let t_timeout_step = timeout_step_task env (free_time init_ts) in
+    let t_connections = connections_task env in
+    Hashtbl.add env.tasks t_timeout_step.fd t_timeout_step;
+    Hashtbl.add env.tasks t_connections.fd t_connections;
     printf "dynamic shim ready";
     print_newline ();
-    eloop 2.0 (Unix.gettimeofday ()) env.tasks env (respond env [] (init me known_names))
+    eloop 2.0 (Unix.gettimeofday ()) env.tasks env (init_state, init_ts)
 end
