@@ -203,7 +203,7 @@ module Shim (A: ARRANGEMENT) = struct
 
   let respond env ((os, s), ps) =
     List.iter (output env) os;
-    List.iter (fun p -> if A.debug then A.debugSend s p; send env p) ps;
+    List.iter (fun p -> if A.debug then A.debug_send s p; send env p) ps;
     s
 
   let new_client_conn env =
