@@ -183,6 +183,7 @@ module Shim (A: ARRANGEMENT) = struct
       printf "[%s] new incoming node connection" (timestamp ());
       print_newline ()
     end;
+    (* TODO: catch Unix_error on accept *)
     let (node_read_fd, node_addr) = Unix.accept env.nodes_fd in
     Unix.set_nonblock node_read_fd;
     let name_buf = 
