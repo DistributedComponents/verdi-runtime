@@ -8,25 +8,25 @@ module type ARRANGEMENT = sig
   type res = (output list * state) * ((name * msg) list)
   type task_handler = name -> state -> res
   type timeout_setter = name -> state -> float option
-  val systemName : string
-  val serializeName : name -> string
-  val deserializeName : string -> name option
+  val system_name : string
+  val serialize_name : name -> bytes
+  val deserialize_name : bytes -> name option
   val init : name -> state
-  val handleIO : name -> input -> state -> res
-  val handleNet : name -> name -> msg -> state -> res
-  val deserializeMsg : string -> msg
-  val serializeMsg : msg -> string
-  val deserializeInput : string -> client_id -> input option
-  val serializeOutput : output -> client_id * string
-  val failMsg : msg option
-  val newMsg : msg option
+  val handle_input : name -> input -> state -> res
+  val handle_msg : name -> name -> msg -> state -> res
+  val deserialize_msg : bytes -> msg
+  val serialize_msg : msg -> bytes
+  val deserialize_input : bytes -> client_id -> input option
+  val serialize_output : output -> client_id * bytes
+  val fail_msg : msg option
+  val new_msg : msg option
   val debug : bool
-  val debugInput : state -> input -> unit
-  val debugRecv : state -> (name * msg) -> unit
-  val debugSend : state -> (name * msg) -> unit
-  val createClientId : unit -> client_id
-  val serializeClientId : client_id -> string
-  val timeoutTasks : (task_handler * timeout_setter) list
+  val debug_input : state -> input -> unit
+  val debug_recv : state -> (name * msg) -> unit
+  val debug_send : state -> (name * msg) -> unit
+  val create_client_id : unit -> client_id
+  val string_of_client_id : client_id -> string
+  val timeout_tasks : (task_handler * timeout_setter) list
 end
 
 module Shim :

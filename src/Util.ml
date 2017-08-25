@@ -124,13 +124,13 @@ let send_chunk fd buf =
   send_all fd buf 0 len
 
 (* throws Unix_error, Disconnect *)
-let recv_chunk fd ht =
+let recv_buf_chunk fd ht =
   if Hashtbl.mem ht fd then begin
     let (rem, buf) = Hashtbl.find ht fd in
     let len = Bytes.length buf in
     let offset = len - rem in
     let n = Unix.recv fd buf offset rem [] in
-    if n = 0 then raise (Disconnect "recv_chunk: other side closed connection");
+    if n = 0 then raise (Disconnect "recv_buf_chunk: other side closed connection");
     if n < rem then begin
       let rem' = rem - n in
       Hashtbl.replace ht fd (rem', buf);
@@ -142,8 +142,8 @@ let recv_chunk fd ht =
   end else begin
     let buf = Bytes.make 4 '\x00' in
     let n = Unix.recv fd buf 0 4 [] in
-    if n = 0 then raise (Disconnect "recv_chunk: other side closed connection");
-    if n < 4 then raise (Disconnect "recv_chunk: message header did not arrive all at once");
+    if n = 0 then raise (Disconnect "recv_buf_chunk: other side closed connection");
+    if n < 4 then raise (Disconnect "recv_buf_chunk: message header did not arrive all at once");
     let len = int_of_raw_bytes buf in
     let buf = Bytes.make len '\x00' in
     try
@@ -163,19 +163,19 @@ let recv_chunk fd ht =
   end
 
 (* throws Unix_error, Disconnect *)
-let receive_chunk fd =
-  let receive_check fd buf offs len flags =
+let recv_full_chunk fd =
+  let recv_check fd buf offs len flags =
     let n = Unix.recv fd buf offs len flags in
-    if n = 0 then raise (Disconnect "receive_chunk: other side closed connection");
+    if n = 0 then raise (Disconnect "recv_full_chunk: other side closed connection");
     n
   in
-  let buf4 = Bytes.make 4 '\x00' in
-  let n = receive_check fd buf4 0 4 [] in
-  if n < 4 then raise (Disconnect "receive_chunk: message header did not arrive all at once");
-  let len = int_of_raw_bytes buf4 in
+  let buf = Bytes.make 4 '\x00' in
+  let n = recv_check fd buf 0 4 [] in
+  if n < 4 then raise (Disconnect "recv_full_chunk: message header did not arrive all at once");
+  let len = int_of_raw_bytes buf in
   let buf = Bytes.make len '\x00' in
-  let n = receive_check fd buf 0 len [] in
-  if n < len then raise (Disconnect (Printf.sprintf "receive_chunk: message of length %d did not arrive all at once" len));
+  let n = recv_check fd buf 0 len [] in
+  if n < len then raise (Disconnect (Printf.sprintf "recv_full_chunk: message of length %d did not arrive all at once" len));
   buf
 
 let arr_of_string s =
