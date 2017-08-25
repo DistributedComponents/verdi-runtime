@@ -224,7 +224,7 @@ module Shim (A: ARRANGEMENT) = struct
     ; finalize = (fun t env (state, ts) -> Unix.close t.fd; (state, ts))
     }
 
-  let main me_addr known_addrs : unit =
+  let main me_addr known_addrs =
     printf "dynamic shim running setup";
     print_newline ();
     let me = A.name_of_addr me_addr in
