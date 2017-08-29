@@ -177,7 +177,7 @@ module Shim (A: ARRANGEMENT) = struct
 	    prerr_newline ();
 	    (true, [], (state, ts))
 	  | Unix.Unix_error (err, fn, _) ->
-	    eprintf "conntection read error: %s" (Unix.error_message err);
+	    eprintf "connection read error: %s" (Unix.error_message err);
 	    prerr_newline ();
 	    (true, [], (state, ts)))
     ; process_wake = (fun t env (state, ts) -> (false, [], (state, ts)))
