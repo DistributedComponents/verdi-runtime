@@ -31,6 +31,7 @@ module Shim (A: ARRANGEMENT) = struct
     ; read_fds : (Unix.file_descr, A.name) Hashtbl.t
     ; write_fds : (A.name, Unix.file_descr) Hashtbl.t
     ; tasks : (Unix.file_descr, (env, A.state * (float * A.timeout) list) task) Hashtbl.t
+    ; read_bufs : (Unix.file_descr, int * bytes) Hashtbl.t
     }
 
   let setup me : env =
@@ -41,8 +42,9 @@ module Shim (A: ARRANGEMENT) = struct
       ; read_fds = Hashtbl.create 17
       ; write_fds = Hashtbl.create 17
       ; tasks = Hashtbl.create 17
+      ; read_bufs = Hashtbl.create 17
       } in
-    let hostname, listen_port = A.addr_of_name env.me in
+    let (hostname, listen_port) = A.addr_of_name env.me in
     let entry = Unix.gethostbyname hostname in
     let listen_addr = entry.Unix.h_addr_list.(0) in
     Unix.setsockopt env.listen_fd Unix.SO_REUSEADDR true;
@@ -155,12 +157,15 @@ module Shim (A: ARRANGEMENT) = struct
 
   (* throws Disconnect, Unix_error *)
   let msg_step env fd s ts =
-    let buf = recv_full_chunk fd in
-    let m = A.deserialize_msg buf in
-    let src = Hashtbl.find env.read_fds fd in
-    let (s', ms, newts, clearedts) = A.msg_handler src env.me s m in
-    if A.debug then A.debug_recv s' (src, m);
-    respond env ts (s', ms, newts, clearedts)
+    match recv_buf_chunk fd env.read_bufs with
+    | None ->
+      (s, ts)
+    | Some buf ->
+      let m = A.deserialize_msg buf in
+      let src = Hashtbl.find env.read_fds fd in
+      let (s', ms, newts, clearedts) = A.msg_handler src env.me s m in
+      if A.debug then A.debug_recv s' (src, m);
+      respond env ts (s', ms, newts, clearedts)
 
   let read_task fd =
     { fd = fd
@@ -189,6 +194,7 @@ module Shim (A: ARRANGEMENT) = struct
 	    print_newline ();
 	  end;
 	  Hashtbl.remove env.read_fds read_fd;
+	  Hashtbl.remove env.read_bufs read_fd;
 	  Unix.close read_fd;
 	  (state, ts))
     }
