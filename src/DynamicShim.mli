@@ -3,8 +3,9 @@ module type ARRANGEMENT = sig
   type state
   type msg
   type timeout
-  type addr = string * int
+  type addr = string
   type res = state * (name * msg) list * timeout list * timeout list
+  val port : int
   val addr_of_name : name -> addr
   val name_of_addr : addr -> name
   val deserialize_msg : bytes -> msg

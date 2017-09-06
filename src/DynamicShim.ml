@@ -7,8 +7,9 @@ module type ARRANGEMENT = sig
   type state
   type msg
   type timeout
-  type addr = string * int
+  type addr = string
   type res = state * (name * msg) list * timeout list * timeout list
+  val port : int
   val addr_of_name : name -> addr
   val name_of_addr : addr -> name
   val deserialize_msg : bytes -> msg
@@ -44,11 +45,11 @@ module Shim (A: ARRANGEMENT) = struct
       ; tasks = Hashtbl.create 17
       ; read_bufs = Hashtbl.create 17
       } in
-    let (hostname, listen_port) = A.addr_of_name env.me in
+    let hostname = A.addr_of_name env.me in
     let entry = Unix.gethostbyname hostname in
     let listen_addr = entry.Unix.h_addr_list.(0) in
     Unix.setsockopt env.listen_fd Unix.SO_REUSEADDR true;
-    Unix.bind env.listen_fd (Unix.ADDR_INET (listen_addr, listen_port));
+    Unix.bind env.listen_fd (Unix.ADDR_INET (listen_addr, A.port));
     Unix.listen env.listen_fd 8;
     Unix.set_nonblock env.listen_fd;
     env
@@ -63,11 +64,11 @@ module Shim (A: ARRANGEMENT) = struct
     List.map add_time ts
 
   let connect_write_fd env nm =
-    let (hostname, port) = A.addr_of_name nm in
+    let hostname = A.addr_of_name nm in
     let entry = Unix.gethostbyname hostname in
     let addr = entry.Unix.h_addr_list.(0) in
     let write_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
-    Unix.connect write_fd (Unix.ADDR_INET (addr, port));
+    Unix.connect write_fd (Unix.ADDR_INET (addr, A.port));
     Hashtbl.add env.write_fds nm write_fd;
     write_fd
 
@@ -143,8 +144,7 @@ module Shim (A: ARRANGEMENT) = struct
     let (read_fd, read_addr) = Unix.accept env.listen_fd in
     let nm =
       match read_addr with
-      | Unix.ADDR_INET (addr, port) ->
-	A.name_of_addr (Unix.string_of_inet_addr addr, port)
+      | Unix.ADDR_INET (addr, port) -> A.name_of_addr (Unix.string_of_inet_addr addr)
       | _ -> assert false
     in
     Unix.set_nonblock read_fd;
