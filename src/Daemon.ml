@@ -49,10 +49,8 @@ let rec eloop default_timeout old_timestamp hts env state =
 	match t.wake_time with
 	| None -> ts
 	| Some wake_time ->
-	  if elapsed_time >= wake_time then
-	    t :: ts
-	  else
-	    (t.wake_time <- Some (wake_time -. elapsed_time); ts))
+	  if elapsed_time >= wake_time then t :: ts
+	  else (t.wake_time <- Some (wake_time -. elapsed_time); ts))
       hts [] in
   List.iter (fun t -> state := process t.process_wake t hts env !state) wake_tasks;
   eloop default_timeout new_timestamp hts env !state

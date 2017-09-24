@@ -152,14 +152,12 @@ let recv_buf_chunk fd ht =
 	let rem = len - n in
 	Hashtbl.add ht fd (rem, buf);
 	None
-      end else
-	Some buf
+      end else Some buf
     with
     | Unix.Unix_error (Unix.EAGAIN, _, _)
-    | Unix.Unix_error (Unix.EWOULDBLOCK, _, _) -> begin
+    | Unix.Unix_error (Unix.EWOULDBLOCK, _, _) ->
       Hashtbl.add ht fd (len, buf);
       None
-    end
   end
 
 (* throws Unix_error, Disconnect *)
