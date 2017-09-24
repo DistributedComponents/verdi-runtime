@@ -1,6 +1,6 @@
 version = "%%VERSION%%"
 description = "Verdi framework runtime library"
-requires = "unix str"
+requires = "unix str cheerios-runtime"
 archive(byte) = "verdi_runtime.cma"
 archive(byte, plugin) = "verdi_runtime.cma"
 archive(native) = "verdi_runtime.cmxa"

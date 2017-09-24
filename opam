@@ -13,6 +13,7 @@ depends: [
   "ocamlbuild" {build}
   "ocamlfind" {build}
   "topkg" {build}
+  "cheerios-runtime"
 ]
 
 authors: [
