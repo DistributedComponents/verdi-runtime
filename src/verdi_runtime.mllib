@@ -5,3 +5,4 @@ Shim
 OrderedShim
 UnorderedShim
 DynamicShim
+DiskOpShim
