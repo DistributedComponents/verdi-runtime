@@ -9,6 +9,7 @@ let () =
 	 Pkg.lib "src/Opts.cmi";
 	 Pkg.lib "src/Daemon.cmi";
 	 Pkg.lib "src/Shim.cmi";
+	 Pkg.lib "src/DisklessShim.cmi";
 	 Pkg.lib "src/OrderedShim.cmi";
 	 Pkg.lib "src/UnorderedShim.cmi";
 	 Pkg.lib "src/DynamicShim.cmi";
