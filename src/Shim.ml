@@ -21,14 +21,13 @@ module type ARRANGEMENT = sig
   val set_timeout : name -> state -> float
   val deserialize_msg : bytes -> msg
   val serialize_msg : msg -> bytes
-  val deserialize_input : bytes -> client_id -> input option
+  val deserialize_input : bytes -> (client_id * input) option
   val serialize_output : output -> client_id * bytes
   val debug : bool
   val debug_input : state -> input -> unit
   val debug_recv : state -> (name * msg) -> unit
   val debug_send : state -> (name * msg) -> unit
   val debug_timeout : state -> unit
-  val create_client_id : unit -> client_id
   val string_of_client_id : client_id -> string
 end
 
@@ -46,7 +45,7 @@ module Shim (A: ARRANGEMENT) = struct
       ; nodes_fd : Unix.file_descr
       ; clients_fd : Unix.file_descr
       ; nodes : (A.name * Unix.sockaddr) list
-      ; client_read_fds : (Unix.file_descr, A.client_id) Hashtbl.t
+      ; client_read_fds : (Unix.file_descr, Unix.sockaddr) Hashtbl.t
       ; client_write_fds : (A.client_id, Unix.file_descr) Hashtbl.t
       ; client_read_bufs : (Unix.file_descr, int * bytes) Hashtbl.t
       ; mutable saves : int
@@ -75,10 +74,6 @@ module Shim (A: ARRANGEMENT) = struct
   (* Translate client id to TCP socket address *)
   let denote_client (env : env) (c : A.client_id) : Unix.file_descr =
     Hashtbl.find env.client_write_fds c
-
-  (* Translate TCP socket address to client id *)
-  let undenote_client (env : env) (fd : Unix.file_descr) : A.client_id =
-    Hashtbl.find env.client_read_fds fd
 
   (* Return state with a single entry from the log applied to the given state. *)
   let update_state_from_log_entry (log : in_channel) (name : A.name) (state : A.state) : A.state =
@@ -154,13 +149,11 @@ module Shim (A: ARRANGEMENT) = struct
     (env, initial_state)
 
   let disconnect_client env fd reason =
-    let c = undenote_client env fd in
+    let addr = Hashtbl.find env.client_read_fds fd in
     Hashtbl.remove env.client_read_fds fd;
-    Hashtbl.remove env.client_write_fds c;
-    Hashtbl.remove env.client_read_bufs fd;
     Unix.close fd;
     if A.debug then begin
-      printf "client %s disconnected: %s" (A.string_of_client_id c) reason;
+      printf "client %s disconnected: %s" (string_of_sockaddr addr) reason;
       print_newline ()
     end
 
@@ -208,14 +201,23 @@ module Shim (A: ARRANGEMENT) = struct
 
   let new_client_conn env =
     let (client_fd, client_addr) = Unix.accept env.clients_fd in
-    let c = A.create_client_id () in
     Unix.set_nonblock client_fd;
-    Hashtbl.add env.client_read_fds client_fd c;
-    Hashtbl.add env.client_write_fds c client_fd;
+    Hashtbl.add env.client_read_fds client_fd client_addr;
     if A.debug then begin
-      printf "client %s connected on %s" (A.string_of_client_id c) (string_of_sockaddr client_addr);
+      printf "client %s connected" (string_of_sockaddr client_addr);
       print_newline ()
-    end
+      end
+
+  let record_client_id env client_id fd =
+    try
+      let fd' = Hashtbl.find env.client_write_fds client_id in
+      if fd <> fd' then
+        (printf "client %s connected on new socket" (A.string_of_client_id client_id);
+         Hashtbl.replace env.client_write_fds client_id fd)
+      else ()
+    with
+    | Not_found -> Hashtbl.add env.client_write_fds client_id fd
+
 
   let input_step (fd : Unix.file_descr) (env : env) (state : A.state) =
     try
@@ -223,13 +225,13 @@ module Shim (A: ARRANGEMENT) = struct
       | None ->
 	state
       | Some buf ->
-	let c = undenote_client env fd in
-	match A.deserialize_input buf c with
-	| Some inp ->
-          save env (LogInput inp) state;
-          let state' = respond env (A.handle_input env.cfg.me inp state) in
-          if A.debug then A.debug_input state' inp;
-          state'
+	match A.deserialize_input buf with
+	| Some (client_id, inp) ->
+     record_client_id env client_id fd;
+     save env (LogInput inp) state;
+     let state' = respond env (A.handle_input env.cfg.me inp state) in
+     if A.debug then A.debug_input state' inp;
+     state'
 	| None ->
 	  disconnect_client env fd "input deserialization failed";
 	  state
