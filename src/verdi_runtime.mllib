@@ -6,3 +6,4 @@ OrderedShim
 UnorderedShim
 DynamicShim
 DiskOpShim
+DisklessShim

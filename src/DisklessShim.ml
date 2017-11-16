@@ -183,7 +183,6 @@ module Shim (A: ARRANGEMENT) = struct
     state'
 
   let timeout_step (env : env) (state : A.state) : A.state =
-    save env LogTimeout state;
     if A.debug then A.debug_timeout state;
     let x = A.handle_timeout env.cfg.me state in
     respond env x
