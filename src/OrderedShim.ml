@@ -185,7 +185,6 @@ module Shim (A: ARRANGEMENT) = struct
     end;
     (* TODO: catch Unix_error on accept *)
     let (node_read_fd, node_addr) = Unix.accept env.nodes_fd in
-    Unix.set_nonblock node_read_fd;
     let name_buf = 
       try recv_full_chunk node_read_fd
       with
@@ -227,6 +226,7 @@ module Shim (A: ARRANGEMENT) = struct
       end;
       Hashtbl.replace env.node_read_fds node_read_fd node_name;
       Hashtbl.replace env.node_fds_read node_name node_read_fd;
+      Unix.set_nonblock node_read_fd;
       if A.debug then begin
 	printf "[%s] done processing new connection from node %s" (timestamp ()) (Bytes.to_string (A.serialize_name node_name));
 	print_newline ()

@@ -31,7 +31,7 @@ module type ARRANGEMENT = sig
   val debug_recv : state -> (name * msg) -> unit
   val debug_send : state -> (name * msg) -> unit
   val debug_timeout : state -> unit
-  val create_client_id : unit -> client_id
+  val deserialize_client_id : bytes -> client_id option
   val string_of_client_id : client_id -> string
   val string_of_file_name : file_name -> string
   val files : file_name list
@@ -50,8 +50,8 @@ module Shim (A: ARRANGEMENT) = struct
       ; nodes_fd : Unix.file_descr
       ; clients_fd : Unix.file_descr
       ; nodes : (A.name * Unix.sockaddr) list
-      ; client_read_fds : (Unix.file_descr, A.client_id) Hashtbl.t
-      ; client_write_fds : (A.client_id, Unix.file_descr) Hashtbl.t
+      ; client_fd_ids : (Unix.file_descr, A.client_id) Hashtbl.t
+      ; client_id_fds : (A.client_id, Unix.file_descr) Hashtbl.t
       ; client_read_bufs : (Unix.file_descr, int * bytes) Hashtbl.t
       ; disk_channels : (A.file_name, out_channel) Hashtbl.t
       }
@@ -87,11 +87,11 @@ module Shim (A: ARRANGEMENT) = struct
 
   (* Translate client id to TCP socket address *)
   let denote_client (env : env) (c : A.client_id) : Unix.file_descr =
-    Hashtbl.find env.client_write_fds c
+    Hashtbl.find env.client_id_fds c
 
   (* Translate TCP socket address to client id *)
   let undenote_client (env : env) (fd : Unix.file_descr) : A.client_id =
-    Hashtbl.find env.client_read_fds fd
+    Hashtbl.find env.client_fd_ids fd
 
   let in_channel_of_file_name (cfg : cfg) : A.file_name -> in_channel option =
     let try_open f = try Some (open_in_bin (full_path cfg f))
@@ -132,8 +132,8 @@ module Shim (A: ARRANGEMENT) = struct
       ; nodes_fd = Unix.socket Unix.PF_INET Unix.SOCK_DGRAM 0
       ; clients_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
       ; nodes = List.map addressify cfg.cluster
-      ; client_read_fds = Hashtbl.create 17
-      ; client_write_fds = Hashtbl.create 17
+      ; client_fd_ids = Hashtbl.create 17
+      ; client_id_fds = Hashtbl.create 17
       ; client_read_bufs = Hashtbl.create 17
       ; disk_channels = disk_channels
       }
@@ -152,8 +152,8 @@ module Shim (A: ARRANGEMENT) = struct
 
   let disconnect_client env fd reason =
     let c = undenote_client env fd in
-    Hashtbl.remove env.client_read_fds fd;
-    Hashtbl.remove env.client_write_fds c;
+    Hashtbl.remove env.client_fd_ids fd;
+    Hashtbl.remove env.client_id_fds c;
     Hashtbl.remove env.client_read_bufs fd;
     Unix.close fd;
     if A.debug then begin
@@ -191,16 +191,40 @@ module Shim (A: ARRANGEMENT) = struct
     List.iter (apply_disk_op env.cfg env.disk_channels) ops;
     s
 
+  (* throws Disconnect *)
   let new_client_conn env =
     let (client_fd, client_addr) = Unix.accept env.clients_fd in
-    let c = A.create_client_id () in
-    Unix.set_nonblock client_fd;
-    Hashtbl.add env.client_read_fds client_fd c;
-    Hashtbl.add env.client_write_fds c client_fd;
-    if A.debug then begin
-      printf "client %s connected on %s" (A.string_of_client_id c) (string_of_sockaddr client_addr);
-      print_newline ()
-    end
+    let client_id_buf =
+      try recv_full_chunk client_fd
+      with
+      | Disconnect s ->
+        Unix.close client_fd;
+        raise (Disconnect s)
+      | Unix.Unix_error (err, fn, _) ->
+        Unix.close client_fd;
+	raise (Disconnect (sprintf "new_client_conn: error in %s: %s" fn (Unix.error_message err)))
+    in
+    match A.deserialize_client_id client_id_buf with
+    | None ->
+      Unix.close client_fd;
+      raise (Disconnect (sprintf "new_client_conn: failed to deserialize client id %s" (Bytes.to_string client_id_buf)))
+    | Some c ->
+      begin
+        try
+          let old_client_fd = denote_client env c in
+          Hashtbl.remove env.client_fd_ids old_client_fd;
+          Hashtbl.remove env.client_id_fds c;
+          Hashtbl.remove env.client_read_bufs old_client_fd;
+          Unix.close old_client_fd
+        with Not_found -> ()
+      end;
+      Hashtbl.add env.client_id_fds c client_fd;
+      Hashtbl.add env.client_fd_ids client_fd c;
+      Unix.set_nonblock client_fd;
+      if A.debug then begin
+        printf "client %s connected on %s" (A.string_of_client_id c) (string_of_sockaddr client_addr);
+        print_newline ()
+      end
 
   let input_step (fd : Unix.file_descr) (env : env) (state : A.state) =
     try
@@ -208,7 +232,7 @@ module Shim (A: ARRANGEMENT) = struct
       | None ->
 	state
       | Some buf ->
-	let c = undenote_client env fd in
+        let c = undenote_client env fd in
 	match A.deserialize_input buf c with
 	| Some inp ->
           let state' = respond env (A.handle_input env.cfg.me inp state) in
@@ -240,15 +264,22 @@ module Shim (A: ARRANGEMENT) = struct
     respond env x
 
   let process_fd env state fd : A.state =
-    if fd = env.clients_fd then
-      (new_client_conn env; state)
-    else if fd = env.nodes_fd then
+    if fd = env.clients_fd then begin
+      begin
+        try new_client_conn env
+        with Disconnect s -> begin
+          eprintf "moving on after client connection error: %s" s;
+          prerr_newline ()
+        end
+      end;
+      state
+    end else if fd = env.nodes_fd then
       msg_step env state
     else
       input_step fd env state
 
   let rec eloop (env : env) (state : A.state) : unit =
-    let all_fds = env.nodes_fd :: env.clients_fd :: keys_of_hashtbl env.client_read_fds in
+    let all_fds = env.nodes_fd :: env.clients_fd :: keys_of_hashtbl env.client_fd_ids in
     let (ready_fds, _, _) = select_unintr all_fds [] [] (A.set_timeout env.cfg.me state) in
     let state' =
       match ready_fds with
