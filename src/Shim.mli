@@ -22,7 +22,7 @@ module type ARRANGEMENT = sig
   val debug_recv : state -> (name * msg) -> unit
   val debug_send : state -> (name * msg) -> unit
   val debug_timeout : state -> unit
-  val create_client_id : unit -> client_id
+  val deserialize_client_id : bytes -> client_id option
   val string_of_client_id : client_id -> string
 end
 
