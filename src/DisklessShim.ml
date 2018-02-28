@@ -133,6 +133,7 @@ module Shim (A: ARRANGEMENT) = struct
   let new_client_conn env =
     let (client_fd, client_addr) = Unix.accept env.clients_fd in
     Unix.set_nonblock client_fd;
+    Unix.setsockopt client_fd Unix.TCP_NODELAY true;
     Hashtbl.add env.client_read_fds client_fd client_addr;
     if A.debug then begin
       printf "client %s connected" (string_of_sockaddr client_addr);
