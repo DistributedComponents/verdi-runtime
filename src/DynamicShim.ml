@@ -73,13 +73,16 @@ module Shim (A: ARRANGEMENT) = struct
     write_fd
 
   (* throws Disconnect, Unix_error *)
-  let send_msg env (dst, msg) =
+  let rec send_msg env (dst, msg) =
     let write_fd =
       try Hashtbl.find env.write_fds dst
       with Not_found -> connect_write_fd env dst
     in
     let buf = A.serialize_msg msg in
-    send_chunk write_fd buf
+    try send_chunk write_fd buf
+    with Unix.Unix_error (Unix.EPIPE, _, _) ->
+      Hashtbl.remove env.write_fds dst;
+      send_msg env (dst, msg)
 
   let respond env ts (s, ps, newts, clearedts) =
     let ts' = filter_cleared clearedts ts @ add_times newts in
