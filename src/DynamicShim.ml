@@ -35,11 +35,11 @@ module Shim (A: ARRANGEMENT) = struct
     ; read_bufs : (Unix.file_descr, int * bytes) Hashtbl.t
     }
 
-  let bind_sock sock name =
+  let bind_sock sock name any_port =
     let hostname = A.addr_of_name name in
     let entry = Unix.gethostbyname hostname in
     let listen_addr = entry.Unix.h_addr_list.(0) in
-    Unix.bind sock (Unix.ADDR_INET (listen_addr, A.port))
+    Unix.bind sock (Unix.ADDR_INET (listen_addr, if any_port then 0 else A.port))
     
   let setup me : env =
     Random.self_init ();
@@ -52,7 +52,7 @@ module Shim (A: ARRANGEMENT) = struct
       ; read_bufs = Hashtbl.create 17
       } in
     Unix.setsockopt env.listen_fd Unix.SO_REUSEADDR true;
-    bind_sock env.listen_fd env.me;
+    bind_sock env.listen_fd env.me false;
     Unix.listen env.listen_fd 8;
     Unix.set_nonblock env.listen_fd;
     env
@@ -72,7 +72,7 @@ module Shim (A: ARRANGEMENT) = struct
     let addr = entry.Unix.h_addr_list.(0) in
     let write_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
     (* bind before connect *)
-    bind_sock write_fd env.me;
+    bind_sock write_fd env.me true;
     Unix.connect write_fd (Unix.ADDR_INET (addr, A.port));
     Hashtbl.add env.write_fds nm write_fd;
     write_fd
