@@ -71,6 +71,7 @@ module Shim (A: ARRANGEMENT) = struct
     let entry = Unix.gethostbyname hostname in
     let addr = entry.Unix.h_addr_list.(0) in
     let write_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+    Unix.setsockopt write_fd Unix.SO_REUSEADDR true;
     (* bind before connect *)
     bind_sock write_fd env.me true;
     Unix.connect write_fd (Unix.ADDR_INET (addr, A.port));
