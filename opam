@@ -1,3 +1,14 @@
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
+version: "7357e8c-dirty"
 opam-version: "1.2"
 version: "dev"
 maintainer: "palmskog@gmail.com"
@@ -14,6 +25,8 @@ depends: [
   "ocamlfind" {build}
   "topkg" {build}
   "cheerios-runtime"
+  "yosjon"
+  "ppx_deriving_yojson"
 ]
 
 authors: [
