@@ -195,12 +195,18 @@ module Shim (A: ARRANGEMENT) = struct
     ; finalize =
 	(fun t env (state, ts) ->
 	  let read_fd = t.fd in
+	  let nm = Hashtbl.find env.read_fds read_fd in
 	  if A.debug then begin
-	    printf "[%s] closing connection" (timestamp ());
+	    printf "[%s] closing connections to %s" (timestamp ()) (A.addr_of_name nm);
 	    print_newline ();
 	  end;
 	  Hashtbl.remove env.read_fds read_fd;
 	  Hashtbl.remove env.read_bufs read_fd;
+	  if Hashtbl.mem env.write_fds nm then begin
+	    let write_fd = Hashtbl.find env.write_fds nm in
+	    Hashtbl.remove env.write_fds nm;
+	    Unix.close write_fd
+	  end;
 	  Unix.close read_fd;
 	  (state, ts))
     }
