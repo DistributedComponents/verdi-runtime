@@ -66,6 +66,7 @@ module Shim (A: ARRANGEMENT) = struct
     let add_time t = (now +. A.set_timeout t, t) in
     List.map add_time ts
 
+  (* throws Unix_error *)
   let connect_write_fd env nm =
     let hostname = A.addr_of_name nm in
     let entry = Unix.gethostbyname hostname in
@@ -78,14 +79,21 @@ module Shim (A: ARRANGEMENT) = struct
     Hashtbl.add env.write_fds nm write_fd;
     write_fd
 
-  (* throws Disconnect, Unix_error *)
   let send_msg env (dst, msg) =
-    let write_fd =
-      try Hashtbl.find env.write_fds dst
-      with Not_found -> connect_write_fd env dst
-    in
-    let buf = A.serialize_msg msg in
-    send_chunk write_fd buf
+    try
+      let write_fd =
+        try Hashtbl.find env.write_fds dst
+        with Not_found -> connect_write_fd env dst
+      in
+      let buf = A.serialize_msg msg in
+      send_chunk write_fd buf
+    with
+    | Disconnect s ->
+      eprintf "connection error: %s" s;
+      prerr_newline ()
+    | Unix.Unix_error (err, fn, _) ->
+      eprintf "connection error: %s" (Unix.error_message err);
+      prerr_newline ()
 
   let respond env ts (s, ps, newts, clearedts) =
     let ts' = filter_cleared clearedts ts @ add_times newts in
