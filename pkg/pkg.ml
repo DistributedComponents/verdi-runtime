@@ -14,7 +14,7 @@ let () =
 	 Pkg.lib "src/UnorderedShim.cmi";
 	 Pkg.lib "src/DynamicShim.cmi";
 	 Pkg.lib "src/DiskOpShim.cmi";
-   Pkg.lib "src/DebugShim.cmi";
+         Pkg.lib "src/DebugShim.cmi";
 	 Pkg.lib "src/verdi_runtime.a";
 	 Pkg.lib "src/verdi_runtime.cma";
 	 Pkg.lib "src/verdi_runtime.cmxa";

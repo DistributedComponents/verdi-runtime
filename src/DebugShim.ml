@@ -8,29 +8,20 @@ module type ARRANGEMENT = sig
   type input
   type output
   type msg
-  type client_id
   type res = (output list * state) * ((name * msg) list)
   val system_name : string
   val init : name -> state
-  val reboot : state -> state
   val handle_input : name -> input -> state -> res
   val handle_msg : name -> name -> msg -> state -> res
   val handle_timeout : name -> state -> res
   val deserialize_msg : bytes -> msg
   val serialize_msg : msg -> bytes
-  val deserialize_input : bytes -> client_id -> input option
-  val serialize_output : output -> client_id * bytes
-  val debug : bool
-  val debug_input : state -> input -> unit
-  val debug_recv : state -> (name * msg) -> unit
-  val debug_send : state -> (name * msg) -> unit
-  val debug_timeout : state -> unit
-  val string_of_client_id : client_id -> string
+  val deserialize_input : bytes -> input
   val string_of_name : name -> string
+  val name_of_string : string -> name
+  val type_of_msg : msg -> string
   val json_of_msg : msg -> json
-  val msg_of_json : json -> msg
   val json_of_state : state -> json
-  val state_of_json : json -> state
 end
 
 module Shim (A: ARRANGEMENT) = struct
@@ -43,56 +34,73 @@ module Shim (A: ARRANGEMENT) = struct
       ; debugger_fd : Unix.file_descr
       }
 
-  (* Load state from disk, initialize environment, and start server. *)
   let setup (cfg : cfg) : (env * A.state) =
     Random.self_init ();
     let env = { cfg = cfg
               ; debugger_fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
               } in
     Unix.setsockopt env.debugger_fd Unix.SO_REUSEADDR true;
-    Unix.setsockopt env.debugger_fd Unix.TCP_NODELAY true;
     let hostname = (Unix.gethostbyname (fst cfg.debugger_addr)).Unix.h_addr_list.(0) in
     let addr = Unix.ADDR_INET(hostname, snd cfg.debugger_addr) in
     Unix.connect env.debugger_fd addr;
     (env, A.init env.cfg.me)
 
-  let respond env (((ops, os), s), ps) =
-    (* TODO: serialize response *)
-    s
-
   let send_json env (j : json) =
     let js = to_string j in
-    send_chunk env.debugger_fd (Bytes.of_string js)
+    Printf.printf "Sending json: %s\n" js;
+    send_chunk_big_endian env.debugger_fd (Bytes.of_string js)
 
   let recv_json env =
-    let js = recv_full_chunk env.debugger_fd in
+    let js = recv_full_chunk_big_endian env.debugger_fd in
+    Printf.printf "Got json: %s\n" (Bytes.to_string js);
     from_string (Bytes.to_string js)
-
-  let register (env : env) : unit =
-    let registration_json =
-      `Assoc([("msgtype", `String("register"))
-             ; ("name", `String(A.string_of_name env.cfg.me))]) in
-    send_json env registration_json
 
   let get_field json f =
     let rec get_field_lst l =
       match l with
       | [] -> raise Not_found
-      | (k, v) :: l' -> if f == k then v else get_field_lst l'
+      | (k, v) :: l' -> if f = k then v else get_field_lst l'
     in
     match json with
     | `Assoc l -> get_field_lst l
     | _ -> raise Not_found
 
+  let get_bool_field json f =
+    match get_field json f with
+    | `Bool v -> v
+    | _ -> raise Not_found
+
+  let get_string_field json f =
+    match get_field json f with
+    | `String v -> v
+    | _ -> raise Not_found
+         
+  exception CommunicationError of string
+         
+  let register (env : env) : unit =
+    let registration_json =
+      `Assoc([("msgtype", `String("register"))
+             ; ("name", `String(A.string_of_name env.cfg.me))]) in
+    send_json env registration_json;
+    let resp = recv_json env in
+    let ok = try
+        get_bool_field resp "ok"
+      with
+      | Not_found -> false
+    in
+    if not ok then raise (CommunicationError "Registration failed")
+
+
   let response_message src (dst, message) =
     `Assoc [("from", `String(A.string_of_name src))
           ; ("to", `String(A.string_of_name dst))
-          ; ("type", `String("Msg"))
-          ; ("body", A.json_of_msg message)]
+          ; ("type", `String(A.type_of_msg message))
+          ; ("body", A.json_of_msg message)
+          ; ("raw", `String(B64.encode (Bytes.to_string (A.serialize_msg message))))]
     
   let response name state messages ?(set_timeout=false) () =
-    `Assoc [("state", A.json_of_state state)
-          ; ("messages", `List (List.map (response_message name) messages))
+    `Assoc [("states", `Assoc [(A.string_of_name name, A.json_of_state state)])
+          ; ("send-messages", `List (List.map (response_message name) messages))
           ; ("set-timeouts",
              if set_timeout then
                `List [`Assoc [("to", `String(A.string_of_name name))
@@ -104,12 +112,28 @@ module Shim (A: ARRANGEMENT) = struct
     let t = get_field msg "msgtype" in
     match t with
     | `String "start" ->
-       (A.init me, response me (A.init me) [] ())
+       (A.init me, response me (A.init me) [] ~set_timeout:true ())
+    | `String "timeout" ->
+       (* ignore output for now... *)
+       let ((_, s), msgs) = A.handle_timeout me state in
+       (s, response me s msgs ~set_timeout:false ())
+    | `String "msg" ->
+       let from = A.name_of_string (get_string_field msg "from") in
+       let body = get_string_field msg "raw" in
+       let msg = A.deserialize_msg (Bytes.of_string (B64.decode body)) in
+       let ((_, s), msgs) = A.handle_msg me from msg state in
+       (s, response me s msgs ~set_timeout:false ())
+    | `String "command" ->
+       let input = A.deserialize_input (Bytes.of_string (get_string_field msg "command")) in
+       let ((_, s), msgs) = A.handle_input me input state in
+       (s, response me s msgs ~set_timeout:false ())
     | _ -> raise Not_found
     
   let rec eloop (env : env) (state : A.state) : unit =
     let j = recv_json env in
     let (state, resp) = handle_debugger_msg env.cfg.me state j in
+    send_json env resp;
+    flush stdout;
     eloop env state
     
   let main (cfg : cfg) : unit =
@@ -117,5 +141,7 @@ module Shim (A: ARRANGEMENT) = struct
     print_newline ();
     let (env, initial_state) = setup cfg in
     print_endline "debug shim ready for action";
+    register env;
+    print_endline "registered";
     eloop env initial_state
 end

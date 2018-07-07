@@ -21,12 +21,13 @@ license: "BSD"
 available: [ ocaml-version >= "4.02.3" ]
 build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [
+  "yojson"
+  "base64"
+  "ppx_deriving_yojson"
   "ocamlbuild" {build}
   "ocamlfind" {build}
   "topkg" {build}
   "cheerios-runtime"
-  "yosjon"
-  "ppx_deriving_yojson"
 ]
 
 authors: [

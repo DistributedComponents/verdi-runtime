@@ -6,11 +6,27 @@ let raw_bytes_of_int (x : int) : bytes =
   Bytes.set buf 3 (char_of_int ((x lsr 24) land 0xff));
   buf
 
-let int_of_raw_bytes (buf : bytes) : int =
+let raw_bytes_of_int_big_endian (x : int) : bytes =
+  let buf = Bytes.make 4 '\x00' in
+  Bytes.set buf 3 (char_of_int (x land 0xff));
+  Bytes.set buf 2 (char_of_int ((x lsr 8) land 0xff));
+  Bytes.set buf 1 (char_of_int ((x lsr 16) land 0xff));
+  Bytes.set buf 0 (char_of_int ((x lsr 24) land 0xff));
+  buf
+
+  
+let int_of_raw_bytes (buf : bytes) : int = 
   (int_of_char (Bytes.get buf 0)) lor
     ((int_of_char (Bytes.get buf 1)) lsl 8) lor
     ((int_of_char (Bytes.get buf 2)) lsl 16) lor
-    ((int_of_char (Bytes.get buf 3)) lsl 24)
+      ((int_of_char (Bytes.get buf 3)) lsl 24)
+  
+let int_of_raw_bytes_big_endian (buf : bytes) : int =
+  (int_of_char (Bytes.get buf 3)) lor
+    ((int_of_char (Bytes.get buf 2)) lsl 8) lor
+      ((int_of_char (Bytes.get buf 1)) lsl 16) lor
+        ((int_of_char (Bytes.get buf 0)) lsl 24)
+    
 
 let char_list_of_string s =
   let rec exp i l =
@@ -123,6 +139,13 @@ let send_chunk fd buf =
   if n < 4 then raise (Disconnect "send_chunk: message header failed to send all at once");
   send_all fd buf 0 len
 
+let send_chunk_big_endian fd buf =
+  let len = Bytes.length buf in
+  let n = Unix.send fd (raw_bytes_of_int_big_endian len) 0 4 [] in
+  if n < 4 then raise (Disconnect "send_chunk: message header failed to send all at once");
+  send_all fd buf 0 len
+
+  
 (* throws Unix_error, Disconnect *)
 let recv_buf_chunk fd ht =
   if Hashtbl.mem ht fd then begin
@@ -161,7 +184,7 @@ let recv_buf_chunk fd ht =
   end
 
 (* throws Unix_error, Disconnect *)
-let recv_full_chunk fd =
+let recv_full_chunk fd  =
   let recv_check fd buf offs len flags =
     let n = Unix.recv fd buf offs len flags in
     if n = 0 then raise (Disconnect "recv_full_chunk: other side closed connection");
@@ -173,9 +196,25 @@ let recv_full_chunk fd =
   let len = int_of_raw_bytes buf in
   let buf = Bytes.make len '\x00' in
   let n = recv_check fd buf 0 len [] in
-  if n < len then raise (Disconnect (Printf.sprintf "recv_full_chunk: message of length %d did not arrive all at once" len));
+  if n < len then raise (Disconnect (Printf.sprintf "recv_full_chunk: message of length %d did not arrive all at once; got %d" len n));
   buf
 
+let recv_full_chunk_big_endian fd =
+  let recv_check fd buf offs len flags =
+    let n = Unix.recv fd buf offs len flags in
+    if n = 0 then raise (Disconnect "recv_full_chunk: other side closed connection");
+    n
+  in
+  let buf = Bytes.make 4 '\x00' in
+  let n = recv_check fd buf 0 4 [] in
+  if n < 4 then raise (Disconnect "recv_full_chunk: message header did not arrive all at once");
+  let len = int_of_raw_bytes_big_endian buf in
+  let buf = Bytes.make len '\x00' in
+  let n = recv_check fd buf 0 len [] in
+  if n < len then raise (Disconnect (Printf.sprintf "recv_full_chunk: message of length %d did not arrive all at once; got %d" len n));
+  buf
+
+  
 let arr_of_string s =
   let listl = (Str.split (Str.regexp " ") s) in
   (Array.of_list listl)

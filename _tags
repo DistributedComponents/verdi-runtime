@@ -1,1 +1,1 @@
-true : bin_annot, safe_string, package(cheerios-runtime), package(yojson), package(ppx_deriving_yojson)
+true : bin_annot, safe_string, package(cheerios-runtime), package(yojson), package(ppx_deriving_yojson), package(base64)
