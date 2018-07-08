@@ -1,4 +1,4 @@
-version = "7357e8c-dirty"
+version = "%%VERSION%%"
 description = "Verdi framework runtime library"
 requires = "unix str cheerios-runtime yojson ppx_deriving_yojson base64"
 archive(byte) = "verdi_runtime.cma"
