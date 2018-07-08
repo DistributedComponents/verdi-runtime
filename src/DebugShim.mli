@@ -14,7 +14,8 @@ module type ARRANGEMENT = sig
   val handle_timeout : name -> state -> res
   val deserialize_msg : bytes -> msg
   val serialize_msg : msg -> bytes
-  val deserialize_input : bytes -> input
+  val deserialize_input : bytes -> input option
+  val commands : string list
   val string_of_name : name -> string
   val name_of_string : string -> name
   val type_of_msg : msg -> string

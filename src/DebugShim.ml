@@ -16,7 +16,8 @@ module type ARRANGEMENT = sig
   val handle_timeout : name -> state -> res
   val deserialize_msg : bytes -> msg
   val serialize_msg : msg -> bytes
-  val deserialize_input : bytes -> input
+  val deserialize_input : bytes -> input option
+  val commands : string list
   val string_of_name : name -> string
   val name_of_string : string -> name
   val type_of_msg : msg -> string
@@ -97,15 +98,21 @@ module Shim (A: ARRANGEMENT) = struct
           ; ("type", `String(A.type_of_msg message))
           ; ("body", A.json_of_msg message)
           ; ("raw", `String(B64.encode (Bytes.to_string (A.serialize_msg message))))]
+
+  let command_timeouts name =
+    List.map (fun c -> `Assoc [("to", `String(A.string_of_name name))
+                             ; ("type", `String("Command"))
+                             ; ("body", `String(c))]) A.commands
     
   let response name state messages ?(set_timeout=false) () =
     `Assoc [("states", `Assoc [(A.string_of_name name, A.json_of_state state)])
           ; ("send-messages", `List (List.map (response_message name) messages))
           ; ("set-timeouts",
              if set_timeout then
-               `List [`Assoc [("to", `String(A.string_of_name name))
+               `List ((`Assoc [("to", `String(A.string_of_name name))
                             ; ("type", `String("Timeout"))
-                            ; ("body", `String("Timeout!"))]]
+                            ; ("body", `String("Timeout!"))])
+                      :: command_timeouts name)
              else `List [])]
                 
   let handle_debugger_msg me state msg =
@@ -115,8 +122,18 @@ module Shim (A: ARRANGEMENT) = struct
        (A.init me, response me (A.init me) [] ~set_timeout:true ())
     | `String "timeout" ->
        (* ignore output for now... *)
-       let ((_, s), msgs) = A.handle_timeout me state in
-       (s, response me s msgs ~set_timeout:false ())
+       (match get_string_field msg "type" with
+        | "Command" ->
+           let body = get_string_field msg "body" in
+           let inp = A.deserialize_input (Bytes.of_string body) in
+           (match inp with
+            | None -> (state, response me state [] ())
+            | Some input ->
+               let ((_, s), msgs) = A.handle_input me input state in
+               (s, response me s msgs ~set_timeout:false ()))
+        | _ ->
+           let ((_, s), msgs) = A.handle_timeout me state in
+           (s, response me s msgs ~set_timeout:false ()))
     | `String "msg" ->
        let from = A.name_of_string (get_string_field msg "from") in
        let body = get_string_field msg "raw" in
@@ -124,9 +141,12 @@ module Shim (A: ARRANGEMENT) = struct
        let ((_, s), msgs) = A.handle_msg me from msg state in
        (s, response me s msgs ~set_timeout:false ())
     | `String "command" ->
-       let input = A.deserialize_input (Bytes.of_string (get_string_field msg "command")) in
-       let ((_, s), msgs) = A.handle_input me input state in
-       (s, response me s msgs ~set_timeout:false ())
+       let inp = A.deserialize_input (Bytes.of_string (get_string_field msg "command")) in
+       (match inp with
+        | None -> (state, response me state [] ())
+        | Some input ->
+           let ((_, s), msgs) = A.handle_input me input state in
+           (s, response me s msgs ~set_timeout:false ()))
     | _ -> raise Not_found
     
   let rec eloop (env : env) (state : A.state) : unit =
