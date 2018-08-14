@@ -1,6 +1,10 @@
 val raw_bytes_of_int : int -> bytes
 
+val raw_bytes_of_int_big_endian : int -> bytes
+  
 val int_of_raw_bytes : bytes -> int
+
+val int_of_raw_bytes_big_endian : bytes -> int
 
 val char_list_of_string : string -> char list
 
@@ -44,8 +48,12 @@ exception Disconnect of string
 
 val send_chunk : Unix.file_descr -> bytes -> unit
 
+val send_chunk_big_endian : Unix.file_descr -> bytes -> unit
+
 val recv_buf_chunk : Unix.file_descr -> (Unix.file_descr, int * bytes) Hashtbl.t -> bytes option
 
 val recv_full_chunk : Unix.file_descr -> bytes
+
+val recv_full_chunk_big_endian : Unix.file_descr -> bytes
 
 val arr_of_string : string -> string array
