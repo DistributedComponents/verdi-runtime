@@ -12,7 +12,6 @@ build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [
   "yojson"
   "base64" {<= "2.3.0"}
-  "ppx_deriving_yojson"
   "ocamlbuild" {build}
   "ocamlfind" {build}
   "topkg" {build}

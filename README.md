@@ -11,6 +11,8 @@ Requirements
 - [`ocamlfind`](http://projects.camlcity.org/projects/findlib.html)
 - [`topkg`](http://erratique.ch/software/topkg)
 - [`cheerios-runtime`](https://github.com/uwplse/cheerios)
+- [`base64`](https://github.com/mirage/ocaml-base64) (2.3.0 or earlier)
+- [`yojson`](https://github.com/ocaml-community/yojson)
 
 Installation
 ------------
