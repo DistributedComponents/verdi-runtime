@@ -97,7 +97,7 @@ module Shim (A: ARRANGEMENT) = struct
           ; ("to", `String(A.string_of_name dst))
           ; ("type", `String(A.type_of_msg message))
           ; ("body", A.json_of_msg message)
-          ; ("raw", `String(B64.encode (Bytes.to_string (A.serialize_msg message))))]
+          ; ("raw", `String(Base64.encode_exn (Bytes.to_string (A.serialize_msg message))))]
 
   let command_timeouts name =
     List.map (fun c -> `Assoc [("to", `String(A.string_of_name name))
@@ -137,7 +137,7 @@ module Shim (A: ARRANGEMENT) = struct
     | `String "msg" ->
        let from = A.name_of_string (get_string_field msg "from") in
        let body = get_string_field msg "raw" in
-       let msg = A.deserialize_msg (Bytes.of_string (B64.decode body)) in
+       let msg = A.deserialize_msg (Bytes.of_string (Base64.decode_exn body)) in
        let ((_, s), msgs) = A.handle_msg me from msg state in
        (s, response me s msgs ~set_timeout:false ())
     | `String "command" ->

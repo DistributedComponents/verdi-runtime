@@ -11,7 +11,7 @@ Requirements
 - [`ocamlfind`](http://projects.camlcity.org/projects/findlib.html)
 - [`topkg`](http://erratique.ch/software/topkg)
 - [`cheerios-runtime`](https://github.com/uwplse/cheerios)
-- [`base64`](https://github.com/mirage/ocaml-base64) (2.3.0 or earlier)
+- [`base64`](https://github.com/mirage/ocaml-base64) (3.0.0 or later)
 - [`yojson`](https://github.com/ocaml-community/yojson)
 
 Installation
@@ -24,7 +24,7 @@ opam repo add distributedcomponents-dev http://opam-dev.distributedcomponents.ne
 opam install verdi-runtime
 ```
 
-If you don't use OPAM, consult the [`opam`](opam) file for build instructions.
+If you don't use OPAM, consult the [opam file](verdi-runtime.opam) for build instructions.
 
 Files
 -----

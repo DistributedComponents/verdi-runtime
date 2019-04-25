@@ -1,17 +1,18 @@
-opam-version: "1.2"
+opam-version: "2.0"
 version: "dev"
 maintainer: "palmskog@gmail.com"
 
 homepage: "https://github.com/DistributedComponents/verdi-runtime"
-dev-repo: "https://github.com/DistributedComponents/verdi-runtime.git"
+dev-repo: "git+https://github.com/DistributedComponents/verdi-runtime.git"
 bug-reports: "https://github.com/DistributedComponents/verdi-runtime/issues"
-license: "BSD"
+license: "BSD-2-Clause"
+synopsis: "Verdi framework runtime library"
 
-available: [ ocaml-version >= "4.02.3" ]
 build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [
+  "ocaml" {>= "4.02.3"}
   "yojson"
-  "base64" {<= "2.3.0"}
+  "base64" {>= "3.0.0"}
   "ocamlbuild" {build}
   "ocamlfind" {build}
   "topkg" {build}
@@ -19,10 +20,10 @@ depends: [
 ]
 
 authors: [
-  "James Wilcox <>"
-  "Doug Woos <>"
-  "Steve Anton <>"
-  "Karl Palmskog <>"
-  "Ryan Doenges <>"
-  "Justin Adsuara <>"
+  "James R. Wilcox"
+  "Doug Woos"
+  "Steve Anton"
+  "Karl Palmskog"
+  "Ryan Doenges"
+  "Justin Adsuara"
 ]
