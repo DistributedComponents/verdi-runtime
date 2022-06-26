@@ -11,7 +11,7 @@ synopsis: "Verdi framework runtime library"
 build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
 depends: [
   "ocaml" {>= "4.02.3"}
-  "yojson"
+  "yojson" {<= "1.7.0"}
   "base64" {>= "3.0.0"}
   "ocamlbuild" {build}
   "ocamlfind" {build}
