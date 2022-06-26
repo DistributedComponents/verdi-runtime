@@ -12,7 +12,7 @@ Requirements
 - [`topkg`](http://erratique.ch/software/topkg)
 - [`cheerios-runtime`](https://github.com/uwplse/cheerios)
 - [`base64`](https://github.com/mirage/ocaml-base64) (3.0.0 or later)
-- [`yojson`](https://github.com/ocaml-community/yojson)
+- [`yojson`](https://github.com/ocaml-community/yojson) (no later than 1.7.0)
 
 Installation
 ------------
