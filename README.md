@@ -17,13 +17,13 @@ Requirements
 Installation
 ------------
 
-The easiest way to install the library (and its dependencies) is via [opam](https://opam.ocaml.org).
-
-```
+The easiest way to install the library (and its dependencies) is via [opam](https://opam.ocaml.org):
+```shell
+opam pin add cheerios-runtime -n -y -k git https://github.com/uwplse/cheerios.git
 opam pin add verdi-runtime -k git https://github.com/DistributedComponents/verdi-runtime.git
 ```
 
-If you don't use opam, consult the [opam file](verdi-runtime.opam) for build instructions.
+If you don't use opam, consult the [opam file](opam) for build instructions.
 
 Files
 -----
