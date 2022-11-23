@@ -29,7 +29,7 @@ jobs:
               opam config list; opam repo list; opam list
             endGroup
             startGroup "Build verdi-runtime dependencies"
-	      opam pin add cheerios-runtime -n -y -k git https://github.com/uwplse/cheerios.git
+              opam pin add cheerios-runtime -n -y -k git https://github.com/uwplse/cheerios.git
               opam pin add verdi-runtime -n -y -k path .
               opam update -y
               opam install -y -j $(nproc) verdi-runtime --deps-only
