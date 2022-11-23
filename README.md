@@ -17,14 +17,13 @@ Requirements
 Installation
 ------------
 
-The easiest way to install the library (and its dependencies) is via [OPAM](https://opam.ocaml.org).
+The easiest way to install the library (and its dependencies) is via [opam](https://opam.ocaml.org).
 
 ```
-opam repo add distributedcomponents-dev http://opam-dev.distributedcomponents.net
-opam install verdi-runtime
+opam pin add verdi-runtime -k git https://github.com/DistributedComponents/verdi-runtime.git
 ```
 
-If you don't use OPAM, consult the [opam file](verdi-runtime.opam) for build instructions.
+If you don't use opam, consult the [opam file](verdi-runtime.opam) for build instructions.
 
 Files
 -----
