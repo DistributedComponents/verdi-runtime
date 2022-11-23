@@ -8,7 +8,7 @@ bug-reports: "https://github.com/DistributedComponents/verdi-runtime/issues"
 license: "BSD-2-Clause"
 synopsis: "Verdi framework runtime library"
 
-build: [ "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" ]
+build: [ "ocaml" "pkg/pkg.ml" "build" "--dev-pkg" "%{dev}%" ]
 depends: [
   "ocaml" {>= "4.02.3"}
   "yojson" {<= "1.7.0"}

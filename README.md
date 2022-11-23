@@ -23,7 +23,7 @@ opam pin add cheerios-runtime -n -y -k git https://github.com/uwplse/cheerios.gi
 opam pin add verdi-runtime -k git https://github.com/DistributedComponents/verdi-runtime.git
 ```
 
-If you don't use opam, consult the [opam file](verdi-runtime.opam) for build instructions.
+If you don't use opam, consult the [opam file](opam) for build instructions.
 
 Files
 -----
