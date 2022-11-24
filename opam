@@ -1,6 +1,6 @@
 opam-version: "2.0"
-version: "dev"
 maintainer: "palmskog@gmail.com"
+version: "dev"
 
 homepage: "https://github.com/DistributedComponents/verdi-runtime"
 dev-repo: "git+https://github.com/DistributedComponents/verdi-runtime.git"
@@ -11,7 +11,7 @@ synopsis: "Verdi framework runtime library"
 build: [ "ocaml" "pkg/pkg.ml" "build" "--dev-pkg" "%{dev}%" ]
 depends: [
   "ocaml" {>= "4.02.3"}
-  "yojson" {<= "1.7.0"}
+  "yojson" {>= "1.7.0"}
   "base64" {>= "3.0.0"}
   "ocamlbuild" {build}
   "ocamlfind" {build}

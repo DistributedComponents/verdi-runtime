@@ -1,4 +1,4 @@
-open Yojson.Basic
+open Yojson.Basic.Util
 
 module type ARRANGEMENT = sig
   type name
@@ -19,8 +19,8 @@ module type ARRANGEMENT = sig
   val string_of_name : name -> string
   val name_of_string : string -> name
   val type_of_msg : msg -> string
-  val json_of_msg : msg -> json
-  val json_of_state : state -> json
+  val json_of_msg : msg -> Yojson.Basic.t
+  val json_of_state : state -> Yojson.Basic.t
 end
 
 module Shim :

@@ -1,6 +1,6 @@
 open Printf
 open Util
-open Yojson.Basic
+open Yojson.Basic.Util
 
 module type ARRANGEMENT = sig
   type name
@@ -21,8 +21,8 @@ module type ARRANGEMENT = sig
   val string_of_name : name -> string
   val name_of_string : string -> name
   val type_of_msg : msg -> string
-  val json_of_msg : msg -> json
-  val json_of_state : state -> json
+  val json_of_msg : msg -> Yojson.Basic.t
+  val json_of_state : state -> Yojson.Basic.t
 end
 
 module Shim (A: ARRANGEMENT) = struct
@@ -46,7 +46,7 @@ module Shim (A: ARRANGEMENT) = struct
     Unix.connect env.debugger_fd addr;
     (env, A.init env.cfg.me)
 
-  let send_json env (j : json) =
+  let send_json env (j : Yojson.Basic.t) =
     let js = to_string j in
     Printf.printf "Sending json: %s\n" js;
     send_chunk_big_endian env.debugger_fd (Bytes.of_string js)
@@ -54,7 +54,7 @@ module Shim (A: ARRANGEMENT) = struct
   let recv_json env =
     let js = recv_full_chunk_big_endian env.debugger_fd in
     Printf.printf "Got json: %s\n" (Bytes.to_string js);
-    from_string (Bytes.to_string js)
+    Yojson.Safe.from_string (Bytes.to_string js)
 
   let get_field json f =
     let rec get_field_lst l =
