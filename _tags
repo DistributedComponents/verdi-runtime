@@ -1,1 +1,1 @@
-true : bin_annot, safe_string, package(cheerios-runtime), package(yojson), package(base64)
+true : bin_annot, safe_string, package(cheerios-runtime), package(yojson), package(base64), package(unix), package(str)
